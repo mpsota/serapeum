@@ -1,0 +1,2500 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8' />
+    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+    <meta name="description" content="Serapeum : Utilities beyond Alexandria" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Serapeum</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/TBRSS/serapeum">View on GitHub</a>
+
+          <h1 id="project_title">Serapeum</h1>
+          <h2 id="project_tagline">Utilities beyond Alexandria</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/TBRSS/serapeum/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/TBRSS/serapeum/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h1>
+<a name="overview" class="anchor" href="#overview"><span class="octicon octicon-link"></span></a>Overview</h1>
+
+<p>Serapeum is a conservative library of Common Lisp utilities. It is a
+supplement, not a competitor, to Alexandria. That means it is safe to
+do:</p>
+
+<pre><code>(defpackage ... (:use #:cl #:alexandria #:serapeum),
+</code></pre>
+
+<p>without package conflicts.</p>
+
+<p>There may already be too many utility libraries for Common Lisp.
+Releasing another has become something to apologize for, not
+celebrate. But I would rather make my apologies than have to maintain
+copy-pasted versions of the same utilities across a dozen systems.
+And, though Serapeum is justified even if only I ever use it, the best
+way to ensure its quality is to write it as if for general use.</p>
+
+<p>Serapeum is conservative: it contains only utilities I actually use,
+and which have survived refactoring. But it is less conservative than
+Alexandria. Alexandria limits itself to utilities with a Common Lisp
+pedigree. Serapeum casts a wider net: other dialects of Lisp, and
+other languages in the functional and array families, have been
+drafted.</p>
+
+<p>Alexandria is self-contained. It exists in splendid isolation, without
+depending on, or even acknowledging, other libraries. Serapeum tries
+to be a good citizen of the Quicklisp era: whenever possible, it
+avoids duplicating functionality that can be had elsewhere.</p>
+
+<p>Some of the utilities in Serapeum are original; others are borrowed
+from other languages, or from other Lispers. I try to give credit in
+the docstrings, but sometimes I have forgotten where I got an idea or
+a name. I regard missing credits as bugs: please report them.</p>
+
+<p>Serapeum is intended to be portable, but it is only tested where it is
+developed, on SBCL and Clozure CL. Patches for other Lisps are
+welcome, whether bug fixes or unportable enhancements.</p>
+
+<h1>
+<a name="commentary" class="anchor" href="#commentary"><span class="octicon octicon-link"></span></a>Commentary</h1>
+
+<p>One goal of Serapeum is to have excellent documentation. A utility
+library is a fork of its language; it deserves documentation of the
+same quality as a language reference. If a utility is not worth
+documenting, it is not worth having.</p>
+
+<p>The full function reference will be found <a href="reference.md">here</a>. (It is
+in a separate file in deference to documentation browsers, which often
+print the README as a preamble to their own function reference).</p>
+
+<p>Most utilities in Serapeum stand alone, but there are two families of
+note: the <code>fbind</code> macros, and the sequence-dividing functions.</p>
+
+<h2>
+<a name="fbind" class="anchor" href="#fbind"><span class="octicon octicon-link"></span></a>fbind</h2>
+
+<p><code>fbind</code>, <code>fbind*</code>, <code>fbindrec</code>, and <code>fbindrec*</code> bind values in the
+function namespace.</p>
+
+<p><code>fbind</code> and <code>fbindrec</code> are like <code>flet</code> and <code>labels</code>, respectively.</p>
+
+<pre><code>(fbind ((fn (lambda ....))) ...)
+≡ (flet ((fn ...)) ...)
+
+(fbindrec ((fn (lambda ...))) ...)
+≡ (labels ((fn ...)) ...)
+</code></pre>
+
+<p><code>fbind*</code> and <code>fbindrec*</code> have no exact parallels: they bind functions
+in sequence, so that each can be used in the construction (not just
+the definition, as with <code>fbindrec</code>) of the next.</p>
+
+<pre><code>(fbind* ((flip2 (lambda (fn)
+                 (lambda (x y)
+                   (funcall fn y x))))
+         (xcons (flip2 #'cons)))
+  (xcons 2 1))
+=&gt; (1 . 2)
+</code></pre>
+
+<p>These are non-trivial implementations. In many cases, <code>fbind</code> can
+produce code that is more efficient than using <code>funcall</code>, and even
+eliminate the overhead of higher-order functions like <code>compose</code> and
+<code>curry</code>. And <code>fbindrec</code>, which builds on <code>fbind</code>, further implements
+the optimizing transformation from Waddell et. al., <em>Fixing Letrec</em>.</p>
+
+<h2>
+<a name="dividing-sequences" class="anchor" href="#dividing-sequences"><span class="octicon octicon-link"></span></a>Dividing sequences</h2>
+
+<p>All recent functional programming languages share a family of useful
+sequence-related functions with terrible names. All of them are called
+something like “split”, “divide”, or “group”, more or less at random.</p>
+
+<p>For each function, we ensure:</p>
+
+<ul>
+<li>It is efficient.</li>
+<li>It returns like sequences for like (lists for lists, strings for
+strings, &amp;c.).</li>
+<li>It accomodates generic sequences (<code>list</code> and <code>vector</code> are not
+necessarily an exhaustive partition of <code>sequence</code>).</li>
+<li>It has a distinctive name which does not use any of the weasel words
+“split,” “divide,” or “group.”</li>
+</ul><p>The function that returns <em>runs</em> of like elements in a sequence is
+called <code>runs</code>:</p>
+
+<pre><code>(runs '(head tail head head tail))
+=&gt; '((head) (tail) (head head) (tail))
+</code></pre>
+
+<p>The function that returns a sequence in <em>batches</em> of a certain size is
+called <code>batches</code>:</p>
+
+<pre><code>(batches (iota 11) 2)
+=&gt; ((0 1) (2 3) (4 5) (6 7) (8 9) (10))
+</code></pre>
+
+<p>The function which groups the like elements of a sequence is called
+<code>assort</code> (because it returns a sequence <em>assorted by</em> some property).</p>
+
+<pre><code>(assort (iota 10)
+        :key (lambda (n) (mod n 3)))
+=&gt; '((0 3 6 9) (1 4 7) (2 5 8))
+</code></pre>
+
+<p>The function that takes a predicate and a sequence, and returns two
+sequences, one of the elements for which the function returns true,
+and one of the elements for which it returns false, is (still) called
+<code>partition</code>.</p>
+
+<pre><code>(partition #'oddp (iota 10))
+=&gt; (1 3 5 7 9), (0 2 4 6 8)
+</code></pre>
+
+<p>The generalized version of <code>partition</code>, which takes a number of
+functions and returns the items that satisfy each condition, is called
+<code>partitions</code>.</p>
+
+<pre><code>(partitions (list #'primep #'evenp) (iota 10))
+=&gt; ((2 3 5 7) (0 4 6 8)), (1 9)
+</code></pre>
+
+<p>Items that do not belong in any partition are returned as a second value.</p>
+
+<p>Serapeum simply re-exports <code>split-sequence</code>, which seems to be firmly
+rooted under its present name.</p>
+
+<h1>
+<a name="function-reference" class="anchor" href="#function-reference"><span class="octicon octicon-link"></span></a>Function reference.</h1>
+
+<h2>
+<a name="macro-tools" class="anchor" href="#macro-tools"><span class="octicon octicon-link"></span></a>Macro Tools</h2>
+
+<h3>
+<a name="string-gensym-x" class="anchor" href="#string-gensym-x"><span class="octicon octicon-link"></span></a><code>(string-gensym x)</code>
+</h3>
+
+<p>Equivalent to (gensym (string x)).</p>
+
+<p>Generally preferable to calling GENSYM with a string, because it
+respects the current read table.</p>
+
+<p>The alternative to writing `(mapcar (compose #'gensym #'string) ...)'
+in every other macro.</p>
+
+<h3>
+<a name="unsplice-form" class="anchor" href="#unsplice-form"><span class="octicon octicon-link"></span></a><code>(unsplice form)</code>
+</h3>
+
+<p>If FORM is non-nil, wrap it in a list.</p>
+
+<p>This is useful with ,@ in macros, and with <code>mapcan</code>.</p>
+
+<p>From Lparallel.</p>
+
+<h3>
+<a name="with-thunk-var-rest-args-body-body" class="anchor" href="#with-thunk-var-rest-args-body-body"><span class="octicon octicon-link"></span></a><code>(with-thunk (var &amp;rest args) &amp;body body)</code>
+</h3>
+
+<p>A macro-writing macro for the <code>call-with-</code> style.</p>
+
+<p>In the <code>call-with-</code> style of writing macros, the macro is simply a
+syntactic convenience that wraps its body in a thunk and a call to the
+function that does the actual work.</p>
+
+<pre><code>(defmacro with-foo (&amp;body body)
+  `(call-with-foo (lambda () ,@body)))
+</code></pre>
+
+<p>The <code>call-with-</code> style has many advantages. Functions are easier to
+write than macros; you can change the behavior of a function without
+having to recompile all its callers; functions can be traced, appear
+in backtraces, etc.</p>
+
+<p>But meanwhile, all those thunks are being allocated on the heap. Can
+we avoid this? Yes, but at a high cost in boilerplate: the closure has
+to be given a name (using <code>flet</code>) so it can be declared
+<code>dynamic-extent</code>.</p>
+
+<pre><code>(defmacro with-foo (&amp;body body)
+  (with-gensyms (thunk)
+    `(flet ((,thunk () ,@body))
+       (declare (dynamic-extent #',thunk))
+       (call-with-foo #',thunk))))
+</code></pre>
+
+<p><code>with-thunk</code> avoids the boilerplate:</p>
+
+<pre><code>(defmacro with-foo (&amp;body body)
+  (with-thunk (body)
+    `(call-with-foo #',body)))
+</code></pre>
+
+<p>It is also possible to construct a "thunk" with arguments.</p>
+
+<pre><code>(with-thunk (body foo)
+  `(call-with-foo #',body))
+≡ `(flet ((,thunk (,foo)
+      ,@body))
+    (declare (dynamic-extent #',thunk))
+    (call-with-foo #',thunk))
+</code></pre>
+
+<p>Needs a better name.</p>
+
+<h3>
+<a name="expand-macro-form-optional-env" class="anchor" href="#expand-macro-form-optional-env"><span class="octicon octicon-link"></span></a><code>(expand-macro form &amp;optional env)</code>
+</h3>
+
+<p>Like <code>macroexpand-1</code>, but also expand compiler macros.
+From Swank.</p>
+
+<h3>
+<a name="expand-macro-recursively-form-optional-env" class="anchor" href="#expand-macro-recursively-form-optional-env"><span class="octicon octicon-link"></span></a><code>(expand-macro-recursively form &amp;optional env)</code>
+</h3>
+
+<p>Like <code>macroexpand</code>, but also expand compiler macros.
+From Swank.</p>
+
+<h3>
+<a name="parse-declarations-declarations" class="anchor" href="#parse-declarations-declarations"><span class="octicon octicon-link"></span></a><code>(parse-declarations declarations)</code>
+</h3>
+
+<p>Pick apart a list of <code>declare</code> forms.</p>
+
+<p>Parse DECLARATIONS into an alist of (identifier . declarations).
+Declarations should be a list like ((declare ...) ...), as would be
+returned by <code>alexandria:parse-body</code>.</p>
+
+<p>Declarations that are specific to functions are normalized to
+use `(function ,identifier).</p>
+
+<p>Type declarations are normalized to the form `(type ,type).</p>
+
+<p>Ftype declarations are also normalized.</p>
+
+<pre><code> (parse-declarations
+  '((declare
+     (fixnum x)
+     (type list xs)
+     (ftype (-&gt; list fixnum) frob)
+     (inline frob)
+     (dynamic-extent #'frob))))
+ =&gt; '((#'frob dynamic-extent inline (ftype (-&gt; list fixnum)))
+      (xs (type list))
+      (x (type fixnum)))
+</code></pre>
+
+<p>Return any optimizations declared as a second value.</p>
+
+<h3>
+<a name="expand-declaration-decl" class="anchor" href="#expand-declaration-decl"><span class="octicon octicon-link"></span></a><code>(expand-declaration decl)</code>
+</h3>
+
+<p>Opposite of <code>parse-declarations</code>.</p>
+
+<p>Take a (identifier . declarations) pair, as returned by
+<code>parse-declarations</code>, and turn it into a declaration form that can be
+used in Lisp code.</p>
+
+<pre><code> (locally ,(expand-declaration decl) ...)
+</code></pre>
+
+<p>Might be used to transfer declarations made for a variable to another,
+temporary variable.</p>
+
+<h3>
+<a name="partition-declarations-xs-declarations" class="anchor" href="#partition-declarations-xs-declarations"><span class="octicon octicon-link"></span></a><code>(partition-declarations xs declarations)</code>
+</h3>
+
+<p>Split DECLARATIONS into those that do and do not apply to XS.
+Return two values, one with each set.</p>
+
+<p>Both sets of declarations are returned in a form that can be spliced
+directly into Lisp code:</p>
+
+<pre><code> (locally ,@(partition-declarations vars decls) ...)
+</code></pre>
+
+<h2>
+<a name="types" class="anchor" href="#types"><span class="octicon octicon-link"></span></a>Types</h2>
+
+<h3>
+<a name="--function-args-values" class="anchor" href="#--function-args-values"><span class="octicon octicon-link"></span></a><code>(-&gt; function args values)</code>
+</h3>
+
+<p>Declaim the ftype of a function from ARGS to VALUES.</p>
+
+<pre><code> (-&gt; mod-fixnum+ (fixnum fixnum) fixnum)
+ (defun mod-fixnum+ (x y) ...)
+</code></pre>
+
+<h2>
+<a name="definitions" class="anchor" href="#definitions"><span class="octicon octicon-link"></span></a>Definitions</h2>
+
+<h3>
+<a name="def-var-body-val-optional-doc-nil-docp" class="anchor" href="#def-var-body-val-optional-doc-nil-docp"><span class="octicon octicon-link"></span></a><code>(def var &amp;body (val &amp;optional (doc nil docp)))</code>
+</h3>
+
+<p>The famous "deflex".</p>
+
+<p>Define a top level (global) lexical VAR with initial value VAL,
+which is assigned unconditionally as with DEFPARAMETER. If a DOC
+string is provided, it is attached to both the name |VAR| and the name
+<em>STORAGE-FOR-DEFLEX-VAR-|VAR|</em> as a documentation string of kind
+'VARIABLE. The new VAR will have lexical scope and thus may be
+shadowed by LET bindings without affecting its dynamic (global) value.</p>
+
+<p>In implementations that support it (SBCL and CCL, at the moment) this
+version creates a backing variable that is "global" or "static",
+so there is not just a change in semantics, but also a gain in
+efficiency.</p>
+
+<p>The original <code>deflex</code> is due to Rob Warnock.</p>
+
+<h3>
+<a name="defconst-symbol-init-optional-docstring" class="anchor" href="#defconst-symbol-init-optional-docstring"><span class="octicon octicon-link"></span></a><code>(defconst symbol init &amp;optional docstring)</code>
+</h3>
+
+<p>Define a constant, lexically.</p>
+
+<p><code>defconst</code> defines a constant using a strategy similar to <code>def</code>, so
+you don’t have to +cage+ your constants.</p>
+
+<p>The name is from Emacs Lisp.</p>
+
+<h3>
+<a name="defsubst-name-params-body-body" class="anchor" href="#defsubst-name-params-body-body"><span class="octicon octicon-link"></span></a><code>(defsubst name params &amp;body body)</code>
+</h3>
+
+<p>Define an inline function.</p>
+
+<pre><code> (defsubst fn ...)
+ ≡ (declaim (inline fn))
+   (defun fn ...)
+</code></pre>
+
+<p>The advantage of a separate defining form for inline functions is that
+you can't forget to declaim the function inline before defining it –
+without which it may not actually end up being inlined.</p>
+
+<p>From Emacs and other ancient Lisps.</p>
+
+<h3>
+<a name="defalias-alias-body-def-optional-docstring" class="anchor" href="#defalias-alias-body-def-optional-docstring"><span class="octicon octicon-link"></span></a><code>(defalias alias &amp;body (def &amp;optional docstring))</code>
+</h3>
+
+<p>Define a value as a top-level function.</p>
+
+<pre><code> (defalias string-gensym (compose #'gensym #'string))
+</code></pre>
+
+<p>Like (setf (fdefinition ALIAS) DEF), but with a place to put
+documentation and some niceties to placate the compiler.</p>
+
+<p>Name from Emacs Lisp.</p>
+
+<h3>
+<a name="defplace-name-args-body-form-optional-docstring" class="anchor" href="#defplace-name-args-body-form-optional-docstring"><span class="octicon octicon-link"></span></a><code>(defplace name args &amp;body (form &amp;optional docstring))</code>
+</h3>
+
+<p>Define NAME and (SETF NAME) in one go.</p>
+
+<p>Note that the body must be a single, setf-able expression.</p>
+
+<h3>
+<a name="defcondition-name-supers-body-slots-rest-options" class="anchor" href="#defcondition-name-supers-body-slots-rest-options"><span class="octicon octicon-link"></span></a><code>(defcondition name supers &amp;body (slots &amp;rest options))</code>
+</h3>
+
+<p>Alias for <code>define-condition</code>.</p>
+
+<p>Like (define-condition ...), but blissfully conforming to the same
+nomenclatural convention as every other definition form in Common
+Lisp.</p>
+
+<h2>
+<a name="binding" class="anchor" href="#binding"><span class="octicon octicon-link"></span></a>Binding</h2>
+
+<h3>
+<a name="lret-rest-bindings-body-body" class="anchor" href="#lret-rest-bindings-body-body"><span class="octicon octicon-link"></span></a><code>(lret (&amp;rest bindings) &amp;body body)</code>
+</h3>
+
+<p>Return the initial value of the last binding in BINDINGS. The idea
+is to create something, initialize it, and then return it.</p>
+
+<p><code>lret</code> may seem trivial, but it fufills the highest purpose a macro
+can: it eliminates a whole class of bugs (initializing an object, but
+forgetting to return it).</p>
+
+<p>Cf. <code>aprog1</code> in Anaphora.</p>
+
+<h3>
+<a name="lret-rest-bindings-body-body-1" class="anchor" href="#lret-rest-bindings-body-body-1"><span class="octicon octicon-link"></span></a><code>(lret* (&amp;rest bindings) &amp;body body)</code>
+</h3>
+
+<p>Cf. <code>lret</code>.</p>
+
+<h3>
+<a name="letrec-rest-bindings-body-body" class="anchor" href="#letrec-rest-bindings-body-body"><span class="octicon octicon-link"></span></a><code>(letrec (&amp;rest bindings) &amp;body body)</code>
+</h3>
+
+<p>Recursive LET.
+The idea is that functions created in BINDINGS can close over one
+another, and themselves.</p>
+
+<p>Note that <code>letrec</code> only binds variables: it can define functions, but
+can't bind them as functions. (But see <code>fbindrec</code>.)</p>
+
+<h3>
+<a name="letrec-rest-bindings-body-body-1" class="anchor" href="#letrec-rest-bindings-body-body-1"><span class="octicon octicon-link"></span></a><code>(letrec* (&amp;rest bindings) &amp;body body)</code>
+</h3>
+
+<p>Like LETREC, but the bindings are evaluated in order.
+See Waddell et al., <em>Fixing Letrec</em> for motivation.</p>
+
+<p>Cf. <code>fbindrec*</code>.</p>
+
+<h3>
+<a name="mvlet-rest-bindings-body-body" class="anchor" href="#mvlet-rest-bindings-body-body"><span class="octicon octicon-link"></span></a><code>(mvlet* (&amp;rest bindings) &amp;body body)</code>
+</h3>
+
+<p>Expand a series of nested <code>multiple-value-bind</code> forms.</p>
+
+<p><code>mvlet*</code> is similar in intent to Scheme’s <code>let-values</code>, but with a
+different and less parenthesis-intensive syntax. Each binding is a
+list of</p>
+
+<pre><code>(var var*... expr)
+</code></pre>
+
+<p>A simple example should suffice to show both the implementation and
+the motivation:</p>
+
+<pre><code>(defun uptime (seconds)
+  (mvlet* ((minutes seconds (truncate seconds 60))
+           (hours minutes (truncate minutes 60))
+           (days hours (truncate hours 24)))
+    (declare ((integer 0 *) days hours minutes seconds))
+    (fmt "~d day~:p, ~d hour~:p, ~d minute~:p, ~d second~:p"
+         days hours minutes seconds)))
+</code></pre>
+
+<p>Note that declarations work just like <code>let*</code>.</p>
+
+<h3>
+<a name="mvlet-rest-bindings-body-body-1" class="anchor" href="#mvlet-rest-bindings-body-body-1"><span class="octicon octicon-link"></span></a><code>(mvlet (&amp;rest bindings) &amp;body body)</code>
+</h3>
+
+<p>Parallel (<code>let</code>-like) version of <code>mvlet*</code>.</p>
+
+<h3>
+<a name="and-let-rest-clauses-body-body" class="anchor" href="#and-let-rest-clauses-body-body"><span class="octicon octicon-link"></span></a><code>(and-let* (&amp;rest clauses) &amp;body body)</code>
+</h3>
+
+<p>Scheme's guarded LET* (SRFI-2).</p>
+
+<p>Each clause should have one of the following forms:</p>
+
+<p><code>identifier</code>
+    in which case identifier's value is tested.
+<code>(expression)</code>
+    in which case the value of expression is tested.
+`(identifier expression)'
+    in which case expression is evaluated, and, if its value is not
+    false, identifier is bound to that value for the remainder of the
+    clauses and the optional body.</p>
+
+<p>Note of course that the semantics are different in Common Lisp,
+because our AND short-circuits on null, not false.</p>
+
+<h2>
+<a name="control-flow" class="anchor" href="#control-flow"><span class="octicon octicon-link"></span></a>Control Flow</h2>
+
+<h3>
+<a name="eval-and-compile-body-body" class="anchor" href="#eval-and-compile-body-body"><span class="octicon octicon-link"></span></a><code>(eval-and-compile &amp;body body)</code>
+</h3>
+
+<p>Emacs's <code>eval-and-compile</code>.</p>
+
+<p>Shorthand for
+        (eval-when (:compile-toplevel :load-toplevel :execute) ...)</p>
+
+<h3>
+<a name="no-x" class="anchor" href="#no-x"><span class="octicon octicon-link"></span></a><code>(no x)</code>
+</h3>
+
+<p>Another alias for <code>not</code> and <code>null</code>.</p>
+
+<p>From Arc.</p>
+
+<h3>
+<a name="nor-rest-forms" class="anchor" href="#nor-rest-forms"><span class="octicon octicon-link"></span></a><code>(nor &amp;rest forms)</code>
+</h3>
+
+<p>Equivalent to (not (or ...)).</p>
+
+<p>From Arc.</p>
+
+<h3>
+<a name="case-using-pred-keyform-body-clauses" class="anchor" href="#case-using-pred-keyform-body-clauses"><span class="octicon octicon-link"></span></a><code>(case-using pred keyform &amp;body clauses)</code>
+</h3>
+
+<p>ISLISP's case-using.</p>
+
+<pre><code> (case-using #'eql x ...)
+ ≡ (case x ...).
+</code></pre>
+
+<p>Note that, no matter the predicate, the keys are not evaluated.</p>
+
+<p>This version supports both single-item clauses (x ...) and
+multiple-item clauses ((x y) ...), as well as (t ...) for the default
+clause.</p>
+
+<h3>
+<a name="string-case-stringform-body-cases" class="anchor" href="#string-case-stringform-body-cases"><span class="octicon octicon-link"></span></a><code>(string-case stringform &amp;body cases)</code>
+</h3>
+
+<p>Efficient <code>case</code>-like macro with string keys.</p>
+
+<p>This uses Paul Khuong's <code>string-case</code> macro internally.</p>
+
+<h3>
+<a name="string-ecase-stringform-body-cases" class="anchor" href="#string-ecase-stringform-body-cases"><span class="octicon octicon-link"></span></a><code>(string-ecase stringform &amp;body cases)</code>
+</h3>
+
+<p>Efficient <code>ecase</code>-like macro with string keys.</p>
+
+<p>Cf. <code>string-case</code>.</p>
+
+<h3>
+<a name="econd-rest-clauses" class="anchor" href="#econd-rest-clauses"><span class="octicon octicon-link"></span></a><code>(econd &amp;rest clauses)</code>
+</h3>
+
+<p>Like <code>cond</code>, but signal an error of type <code>econd-failure</code> if no
+clause succeeds.</p>
+
+<h3>
+<a name="cond-let-var-body-clauses" class="anchor" href="#cond-let-var-body-clauses"><span class="octicon octicon-link"></span></a><code>(cond-let var &amp;body clauses)</code>
+</h3>
+
+<p>Cross between COND and LET.</p>
+
+<pre><code> (cond-let x ((test ...)))
+ ≡ (let (x)
+     (cond ((setf x test) ...)))
+</code></pre>
+
+<p>Cf. <code>acond</code> in Anaphora.</p>
+
+<h3>
+<a name="econd-let-symbol-rest-clauses" class="anchor" href="#econd-let-symbol-rest-clauses"><span class="octicon octicon-link"></span></a><code>(econd-let symbol &amp;rest clauses)</code>
+</h3>
+
+<p>Like <code>cond-let</code> for <code>econd</code>.</p>
+
+<h3>
+<a name="cond-every-body-clauses" class="anchor" href="#cond-every-body-clauses"><span class="octicon octicon-link"></span></a><code>(cond-every &amp;body clauses)</code>
+</h3>
+
+<p>Like <code>cond</code>, but instead of stopping after the first clause that
+succeeds, run all the clauses that succeed.</p>
+
+<p>Return the value of the last successful clause.</p>
+
+<p>If a clause begins with <code>cl:otherwise</code>, it runs only if no preceding
+form has succeeded.</p>
+
+<p>From Zetalisp.</p>
+
+<h3>
+<a name="case-let-var-expr-body-cases" class="anchor" href="#case-let-var-expr-body-cases"><span class="octicon octicon-link"></span></a><code>(case-let (var expr) &amp;body cases)</code>
+</h3>
+
+<p>Like (let ((VAR EXPR)) (case VAR ...))</p>
+
+<h3>
+<a name="ecase-let-var-expr-body-cases" class="anchor" href="#ecase-let-var-expr-body-cases"><span class="octicon octicon-link"></span></a><code>(ecase-let (var expr) &amp;body cases)</code>
+</h3>
+
+<p>Like (let ((VAR EXPR)) (ecase VAR ...))</p>
+
+<h3>
+<a name="comment-body-body" class="anchor" href="#comment-body-body"><span class="octicon octicon-link"></span></a><code>(comment &amp;body body)</code>
+</h3>
+
+<p>A macro that ignores its body and does nothing. Useful for
+comments-by-example.</p>
+
+<p>Also, as noted in EXTENSIONS.LISP of 1992, "This may seem like a
+silly macro, but used inside of other macros or code generation
+facilities it is very useful - you can see comments in the (one-time)
+macro expansion!"</p>
+
+<h3>
+<a name="example-body-body" class="anchor" href="#example-body-body"><span class="octicon octicon-link"></span></a><code>(example &amp;body body)</code>
+</h3>
+
+<p>Like <code>comment</code>.</p>
+
+<h3>
+<a name="nix-place" class="anchor" href="#nix-place"><span class="octicon octicon-link"></span></a><code>(nix place)</code>
+</h3>
+
+<p>Set PLACE to nil and return the old value of PLACE.</p>
+
+<p>This may be more efficient than (shiftf place nil), because it only
+sets PLACE when it is not already null.</p>
+
+<h3>
+<a name="ensure-place-body-newval" class="anchor" href="#ensure-place-body-newval"><span class="octicon octicon-link"></span></a><code>(ensure place &amp;body newval)</code>
+</h3>
+
+<p>Essentially (or place (setf place newval)).</p>
+
+<p>PLACE is treated as unbound if it returns <code>nil</code>, signals
+<code>unbound-slot</code>, or signals <code>unbound-variable</code>.</p>
+
+<p>Note that ENSURE is <code>setf</code>-able, so you can do things like
+     (incf (ensure x 0))</p>
+
+<p>Cf. <code>ensure2</code>.</p>
+
+<h3>
+<a name="ensure2-place-body-newval" class="anchor" href="#ensure2-place-body-newval"><span class="octicon octicon-link"></span></a><code>(ensure2 place &amp;body newval)</code>
+</h3>
+
+<p>Like <code>ensure</code>, but specifically for accessors that return a second
+value like <code>gethash</code>.</p>
+
+<h3>
+<a name="callf-function-place-rest-args" class="anchor" href="#callf-function-place-rest-args"><span class="octicon octicon-link"></span></a><code>(callf function place &amp;rest args)</code>
+</h3>
+
+<p>Set PLACE to the value of calling FUNCTION on PLACE, with ARGS.</p>
+
+<h3>
+<a name="callf2-function-arg1-place-rest-args" class="anchor" href="#callf2-function-arg1-place-rest-args"><span class="octicon octicon-link"></span></a><code>(callf2 function arg1 place &amp;rest args)</code>
+</h3>
+
+<p>Like CALLF, but with the place as the second argument.</p>
+
+<h3>
+<a name="-needle-rest-holes" class="anchor" href="#-needle-rest-holes"><span class="octicon octicon-link"></span></a><code>(~&gt; needle &amp;rest holes)</code>
+</h3>
+
+<p>Threading macro from Clojure (by way of Racket).</p>
+
+<p>Thread NEEDLE through HOLES, where each hole is either a
+symbol (equivalent to <code>(hole needle)</code>) or a list (equivalent to <code>(hole
+needle args...)</code>).</p>
+
+<p>As an extension, an underscore in the argument list is replaced with
+the needle, so you can pass the needle as an argument other than the
+first.</p>
+
+<h3>
+<a name="-needle-rest-holes-1" class="anchor" href="#-needle-rest-holes-1"><span class="octicon octicon-link"></span></a><code>(~&gt;&gt; needle &amp;rest holes)</code>
+</h3>
+
+<p>Like <code>~&gt;</code> but, by default, thread NEEDLE as the last argument
+instead of the first.</p>
+
+<h3>
+<a name="select-keyform-body-clauses" class="anchor" href="#select-keyform-body-clauses"><span class="octicon octicon-link"></span></a><code>(select keyform &amp;body clauses)</code>
+</h3>
+
+<p>Like <code>case</code>, but with evaluated keys.</p>
+
+<p>Note that, like <code>case</code>, <code>select</code> interprets a list as the first
+element of a clause as a list of keys. To use a form as a key, you
+must add an extra set of parentheses.</p>
+
+<pre><code> (select 2
+   ((+ 2 2) t))
+ =&gt; T
+
+ (select 4
+   (((+ 2 2)) t))
+ =&gt; T
+</code></pre>
+
+<p>This version of <code>select</code> is smart enough to compile itself to a <code>case</code>
+statement if all its keys are constants.</p>
+
+<p>From Zetalisp.</p>
+
+<h3>
+<a name="selector-keyform-fn-body-clauses" class="anchor" href="#selector-keyform-fn-body-clauses"><span class="octicon octicon-link"></span></a><code>(selector keyform fn &amp;body clauses)</code>
+</h3>
+
+<p>Like <code>select</code>, but compare using FN.</p>
+
+<p>Note that (unlike <code>case-using</code>), FN is not evaluated.</p>
+
+<p>From Zetalisp.</p>
+
+<h3>
+<a name="atomic-body-body" class="anchor" href="#atomic-body-body"><span class="octicon octicon-link"></span></a><code>(atomic &amp;body body)</code>
+</h3>
+
+<p>Run BODY as an anonymous critical section.</p>
+
+<p>Only one thread can run BODY at a time.</p>
+
+<h2>
+<a name="iter" class="anchor" href="#iter"><span class="octicon octicon-link"></span></a>Iter</h2>
+
+<h3>
+<a name="nlet-name-rest-bindings-body-body" class="anchor" href="#nlet-name-rest-bindings-body-body"><span class="octicon octicon-link"></span></a><code>(nlet name (&amp;rest bindings) &amp;body body)</code>
+</h3>
+
+<p>Within BODY, bind NAME as a function, somewhat like LABELS, but
+with the guarantee that recursive calls to NAME will not grow the
+stack.</p>
+
+<p><code>nlet</code> resembles Scheme’s named let, and is used for the same purpose:
+writing loops using tail recursion. You could of course do this with
+<code>labels</code> as well, at least under some Lisp implementations, but <code>nlet</code>
+guarantees tail call elimination anywhere and everywhere.</p>
+
+<pre><code>(nlet rec ((i 1000000))
+  (if (= i 0)
+      0
+      (rec (1- i))))
+=&gt; 0
+</code></pre>
+
+<p>Beware: because of the way it is written (literally, a GOTO with
+arguments), <code>nlet</code> is limited: self calls must be tail calls. That is,
+you cannot use <code>nlet</code> for true recursion.</p>
+
+<p>The name comes from `Let Over Lambda', but this is a different
+implementation: the function is not bound while the initial arguments
+are being evaluated, and it is safe to close over the arguments.</p>
+
+<h3>
+<a name="collecting-body-body" class="anchor" href="#collecting-body-body"><span class="octicon octicon-link"></span></a><code>(collecting &amp;body body)</code>
+</h3>
+
+<p>Within BODY, bind <code>collect</code> to a function of one arguments that
+accumulate all the arguments it has been called with in order, like
+the collect clause in <code>loop</code>, finally returning the collection.</p>
+
+<p>To see the collection so far, call <code>collect</code> with no arguments.</p>
+
+<p>Note that this version of <code>collecting</code> binds <code>collect</code> to a closure,
+not a macro: you can pass the collector around or return it like any
+other function.</p>
+
+<h3>
+<a name="summing-body-body" class="anchor" href="#summing-body-body"><span class="octicon octicon-link"></span></a><code>(summing &amp;body body)</code>
+</h3>
+
+<p>Within BODY, bind <code>sum</code> to a function that gathers numbers to sum.</p>
+
+<p>Return the total.</p>
+
+<h3>
+<a name="minimizing-body-body" class="anchor" href="#minimizing-body-body"><span class="octicon octicon-link"></span></a><code>(minimizing &amp;body body)</code>
+</h3>
+
+<p>Within BODY, bind <code>minimize</code> to a function that tracks its least argument.</p>
+
+<p>Return the minimum.</p>
+
+<h3>
+<a name="maximizing-body-body" class="anchor" href="#maximizing-body-body"><span class="octicon octicon-link"></span></a><code>(maximizing &amp;body body)</code>
+</h3>
+
+<p>Within BODY, bind <code>maximize</code> to a function that tracks its greatest argument.</p>
+
+<p>Return the maximum.</p>
+
+<h2>
+<a name="conditions" class="anchor" href="#conditions"><span class="octicon octicon-link"></span></a>Conditions</h2>
+
+<h3>
+<a name="ignoring-type-body-body" class="anchor" href="#ignoring-type-body-body"><span class="octicon octicon-link"></span></a><code>(ignoring type &amp;body body)</code>
+</h3>
+
+<p>An improved version of <code>ignore-errors</code>.</p>
+
+<p>The behavior is the same: if an error occurs in the body, the form
+returns two values, <code>nil</code> and the condition itself.</p>
+
+<p><code>ignoring</code> forces you to specify the kind of error you want to ignore:</p>
+
+<pre><code>(ignoring parse-error
+  ...)
+</code></pre>
+
+<p>I call it an improvement because I think <code>ignore-errors</code> is too broad:
+by hiding all errors it becomes itself a source of bugs.</p>
+
+<p>Of course you can still ignore all errors, at the cost of one extra
+character:</p>
+
+<pre><code>(ignoring error
+  ...)
+</code></pre>
+
+<p>NB <code>(ignoring t)</code> is a bad idea.</p>
+
+<h2>
+<a name="op" class="anchor" href="#op"><span class="octicon octicon-link"></span></a>Op</h2>
+
+<h3>
+<a name="op-body-body" class="anchor" href="#op-body-body"><span class="octicon octicon-link"></span></a><code>(op &amp;body body)</code>
+</h3>
+
+<p>GOO's simple macro for positional lambdas.</p>
+
+<p>An OP is like a lambda without an argument list. Within the body of the OP
+form, an underscore introduces a new argument.</p>
+
+<pre><code> (reduce (op (set-intersection _ _ :test #'equal))
+         sets)
+</code></pre>
+
+<p>You can refer back to each argument by number, starting with _1.</p>
+
+<pre><code> (funcall (op (+ _ _1)) 2) =&gt; 4
+</code></pre>
+
+<p>You can also use positional arguments directly:</p>
+
+<pre><code> (reduce (op (funcall _2 _1)) ...)
+</code></pre>
+
+<p>Argument lists can be sparse:</p>
+
+<pre><code> (apply (op (+ _1 _3 _5)) '(1 2 3 4 5)) =&gt; 9
+</code></pre>
+
+<p>Note that OP with a single argument is equivalent to CONSTANTLY:</p>
+
+<pre><code> (funcall (op 1)) =&gt; 1
+</code></pre>
+
+<p>and that OP with a single placeholder is equivalent to IDENTITY:</p>
+
+<pre><code> (funcall (op _) 1) =&gt; 1
+</code></pre>
+
+<p>OP can also be used to define variadic functions by using _* as the
+placeholder. It is not necessary to use APPLY.</p>
+
+<pre><code> (apply (op (+ _*)) '(1 2 3 4)) =&gt; 10
+</code></pre>
+
+<h2>
+<a name="fbind-1" class="anchor" href="#fbind-1"><span class="octicon octicon-link"></span></a>Fbind</h2>
+
+<h3>
+<a name="fbind-bindings-body-body" class="anchor" href="#fbind-bindings-body-body"><span class="octicon octicon-link"></span></a><code>(fbind bindings &amp;body body)</code>
+</h3>
+
+<p>Binds values in the function namespace.</p>
+
+<p>That is,
+     (fbind ((fn (lambda () ...))))
+     ≡ (flet ((fn () ...))),</p>
+
+<p>except that a bare symbol in BINDINGS is rewritten as (symbol
+symbol).</p>
+
+<h3>
+<a name="fbind-bindings-body-body-1" class="anchor" href="#fbind-bindings-body-body-1"><span class="octicon octicon-link"></span></a><code>(fbind* bindings &amp;body body)</code>
+</h3>
+
+<p>Like <code>fbind</code>, but creates bindings sequentially.</p>
+
+<h3>
+<a name="fbindrec-bindings-body-body" class="anchor" href="#fbindrec-bindings-body-body"><span class="octicon octicon-link"></span></a><code>(fbindrec bindings &amp;body body)</code>
+</h3>
+
+<p>Like <code>fbind</code>, but creates recursive bindings.</p>
+
+<p>The consequences of referring to one binding in the expression that
+generates another are undefined.</p>
+
+<h3>
+<a name="fbindrec-bindings-body-body-1" class="anchor" href="#fbindrec-bindings-body-body-1"><span class="octicon octicon-link"></span></a><code>(fbindrec* bindings &amp;body body)</code>
+</h3>
+
+<p>Like <code>fbindrec</code>, but the function defined in each binding can be
+used in successive bindings.</p>
+
+<h2>
+<a name="functions" class="anchor" href="#functions"><span class="octicon octicon-link"></span></a>Functions</h2>
+
+<h3>
+<a name="partial-fn-rest-args" class="anchor" href="#partial-fn-rest-args"><span class="octicon octicon-link"></span></a><code>(partial fn &amp;rest args)</code>
+</h3>
+
+<p>Alias for <code>alexandria:curry</code>.</p>
+
+<h3>
+<a name="flip-f" class="anchor" href="#flip-f"><span class="octicon octicon-link"></span></a><code>(flip f)</code>
+</h3>
+
+<p>Flip around the arguments of a binary function.</p>
+
+<p>That is, given a binary function, return another, equivalent function
+that takes its two arguments in the opposite order.</p>
+
+<p>From Haskell.</p>
+
+<h3>
+<a name="nth-arg-n" class="anchor" href="#nth-arg-n"><span class="octicon octicon-link"></span></a><code>(nth-arg n)</code>
+</h3>
+
+<p>Return a function that returns only its NTH argument, ignoring all others.</p>
+
+<p>If you've ever caught yourself trying to do something like</p>
+
+<pre><code>(mapcar #'second xs ys)
+</code></pre>
+
+<p>then <code>nth-arg</code> is what you need.</p>
+
+<p>If <code>hash-table-keys</code> were not already defined by Alexandria, you could
+define it thus:</p>
+
+<pre><code>(defun hash-table-keys (table)
+  (maphash-return (nth-arg 0) table))
+</code></pre>
+
+<h3>
+<a name="distinct-key-key-test" class="anchor" href="#distinct-key-key-test"><span class="octicon octicon-link"></span></a><code>(distinct &amp;key key test)</code>
+</h3>
+
+<p>Return a function that echoes only values it has not seen before.</p>
+
+<pre><code>(defalias test (distinct))
+(test 'foo) =&gt; foo, t
+(test 'foo) =&gt; nil, nil
+</code></pre>
+
+<p>The second value is T when the value is distinct.</p>
+
+<p>TEST must be a valid test for a hash table.</p>
+
+<p>This has many uses, for example:</p>
+
+<pre><code>(count-if (distinct) seq)
+≡ (length (remove-duplicates seq))
+</code></pre>
+
+<h3>
+<a name="throttle-fn-wait-key-synchronized" class="anchor" href="#throttle-fn-wait-key-synchronized"><span class="octicon octicon-link"></span></a><code>(throttle fn wait &amp;key synchronized)</code>
+</h3>
+
+<p>Wrap FN so it can be called no more than every WAIT seconds.
+If FN was called less than WAIT seconds ago, return the values from the
+last call. Otherwise, call FN normally and update the cached values.</p>
+
+<p>WAIT, of course, may be a fractional number of seconds.</p>
+
+<p>The throttled function is not thread-safe by default; use SYNCHRONIZED
+to get a version with a lock.</p>
+
+<h3>
+<a name="juxt-rest-fns" class="anchor" href="#juxt-rest-fns"><span class="octicon octicon-link"></span></a><code>(juxt &amp;rest fns)</code>
+</h3>
+
+<p>Clojure's <code>juxt</code>.</p>
+
+<p>Return a function of one argument, which, in turn, returns a list
+where each element is the result of applying one of FNS to the
+argument.</p>
+
+<p>It’s actually quite simple, but easier to demonstrate than to explain.
+The classic example is to use <code>juxt</code> to implement <code>partition</code>:</p>
+
+<pre><code>(defalias partition* (juxt #'filter #'remove-if))
+(partition* #'evenp '(1 2 3 4 5 6 7 8 9 10))
+=&gt; '((2 4 6 8 10) (1 3 5 7 9))
+</code></pre>
+
+<p>The general idea is that <code>juxt</code> takes things apart.</p>
+
+<h3>
+<a name="dynamic-closure-symbols-fn" class="anchor" href="#dynamic-closure-symbols-fn"><span class="octicon octicon-link"></span></a><code>(dynamic-closure symbols fn)</code>
+</h3>
+
+<p>Create a dynamic closure.</p>
+
+<p>Some ancient Lisps had closures without lexical binding. Instead, you
+could "close over" pieces of the current dynamic environment. When
+the resulting closure was called, the symbols closed over would be
+bound to their values at the time the closure was created. These
+bindings would persist through subsequent invocations and could be
+mutated. The result was something between a closure and a
+continuation.</p>
+
+<p>This particular piece of Lisp history is worth reviving, I think, if
+only for use with threads. For example, to start a thread and
+propagate the current value of <code>*standard-output*</code>:</p>
+
+<pre><code> (bt:make-thread (dynamic-closure '(*standard-output*) (lambda ...)))
+ = (let ((temp *standard-output*))
+     (bt:make-thread
+      (lambda ...
+        (let ((*standard-output* temp))
+          ...))))
+</code></pre>
+
+<h2>
+<a name="lists" class="anchor" href="#lists"><span class="octicon octicon-link"></span></a>Lists</h2>
+
+<h3>
+<a name="filter-map-fn-list-rest-lists" class="anchor" href="#filter-map-fn-list-rest-lists"><span class="octicon octicon-link"></span></a><code>(filter-map fn list &amp;rest lists)</code>
+</h3>
+
+<p>Map FN over LISTS like <code>mapcar</code>, but omit empty results.</p>
+
+<pre><code> (filter-map fn ...)
+ ≅ (remove nil (mapcar fn ...))
+</code></pre>
+
+<h3>
+<a name="car-safe-x" class="anchor" href="#car-safe-x"><span class="octicon octicon-link"></span></a><code>(car-safe x)</code>
+</h3>
+
+<p>The car of X, or nil if X is not a cons.</p>
+
+<p>This is different from Alexandria’s <code>ensure-car</code>, which returns the atom.</p>
+
+<pre><code>(ensure-car '(1 . 2)) =&gt; 1
+(car-safe '(1 . 2)) =&gt; 1
+(ensure-car 1) =&gt; 1
+(car-safe 1) =&gt; nil
+</code></pre>
+
+<p>From Emacs Lisp.</p>
+
+<h3>
+<a name="cdr-safe-x" class="anchor" href="#cdr-safe-x"><span class="octicon octicon-link"></span></a><code>(cdr-safe x)</code>
+</h3>
+
+<p>The cdr of X, or nil if X is not a cons.
+From Emacs Lisp.</p>
+
+<h3>
+<a name="append1-list-item" class="anchor" href="#append1-list-item"><span class="octicon octicon-link"></span></a><code>(append1 list item)</code>
+</h3>
+
+<p>Append an atom to a list.</p>
+
+<pre><code>(append1 list item)
+≡ (append list (list item))
+</code></pre>
+
+<h3>
+<a name="in-x-rest-items" class="anchor" href="#in-x-rest-items"><span class="octicon octicon-link"></span></a><code>(in x &amp;rest items)</code>
+</h3>
+
+<p>Is X equal to any of ITEMS?</p>
+
+<p><code>(in x xs...)</code> is always equivalent to <code>(member x xs :test equal)</code>,
+but <code>in</code> can sometimes compile to more efficient code when the
+candidate matches are constant.</p>
+
+<p>From Arc.</p>
+
+<h3>
+<a name="memq-item-list" class="anchor" href="#memq-item-list"><span class="octicon octicon-link"></span></a><code>(memq item list)</code>
+</h3>
+
+<p>Like (member ... :test #'eq).
+Should only be used for symbols.</p>
+
+<h3>
+<a name="delq-item-list" class="anchor" href="#delq-item-list"><span class="octicon octicon-link"></span></a><code>(delq item list)</code>
+</h3>
+
+<p>Like (delete ... :test #'eq), but only for lists.</p>
+
+<p>Almost always used as (delq nil ...).</p>
+
+<h3>
+<a name="mapply-fn-rest-lists" class="anchor" href="#mapply-fn-rest-lists"><span class="octicon octicon-link"></span></a><code>(mapply fn &amp;rest lists)</code>
+</h3>
+
+<p><code>mapply</code> is a cousin of <code>mapcar</code>.</p>
+
+<p>If you think of <code>mapcar</code> as using <code>funcall</code>:</p>
+
+<pre><code>(mapcar #'- '(1 2 3))
+≡ (loop for item in '(1 2 3)
+         collect (funcall #'- item))
+</code></pre>
+
+<p>Then <code>mapply</code> does the same thing, but using <code>apply</code>.</p>
+
+<pre><code>(mapply #'+ '((1 2 3) (4 5 6)))
+=&gt; (6 15)
+</code></pre>
+
+<p>In variadic use, <code>mapply</code> acts as if <code>mapcar #'append</code> had first been
+used:</p>
+
+<pre><code>(mapply #'+ xs ys)
+≡ (mapply #'+ (mapcar #'append xs ys))
+</code></pre>
+
+<p>But the actual implementation is more efficient.</p>
+
+<h3>
+<a name="assocdr-item-alist-rest-args" class="anchor" href="#assocdr-item-alist-rest-args"><span class="octicon octicon-link"></span></a><code>(assocdr item alist &amp;rest args)</code>
+</h3>
+
+<p>Like (cdr (assoc ...))</p>
+
+<h3>
+<a name="assocadr-item-alist-rest-args" class="anchor" href="#assocadr-item-alist-rest-args"><span class="octicon octicon-link"></span></a><code>(assocadr item alist &amp;rest args)</code>
+</h3>
+
+<p>Like <code>assocdr</code> for alists of proper lists.</p>
+
+<pre><code> (assocdr 'x '((x 1))) =&gt; '(1)
+ (assocadr 'x '((x 1))) =&gt; 1
+</code></pre>
+
+<h3>
+<a name="rassocar-item-alist-rest-args" class="anchor" href="#rassocar-item-alist-rest-args"><span class="octicon octicon-link"></span></a><code>(rassocar item alist &amp;rest args)</code>
+</h3>
+
+<p>Like (car (rassoc ...))</p>
+
+<h3>
+<a name="firstn-n-list" class="anchor" href="#firstn-n-list"><span class="octicon octicon-link"></span></a><code>(firstn n list)</code>
+</h3>
+
+<p>The first N elements of LIST, as a fresh list:</p>
+
+<pre><code>(firstn 4 (iota 10))
+=&gt; (0 1 2 4)
+</code></pre>
+
+<p>(I do not why this extremely useful function did not make it into
+Common Lisp, unless it was deliberately left out as an exercise for
+Maclisp users.)</p>
+
+<h3>
+<a name="inconsistent-graph-constraints-inconsistent-graph" class="anchor" href="#inconsistent-graph-constraints-inconsistent-graph"><span class="octicon octicon-link"></span></a><code>(inconsistent-graph-constraints inconsistent-graph)</code>
+</h3>
+
+<p>The constraints of an <code>inconsistent-graph</code> error.
+Cf. <code>toposort</code>.</p>
+
+<h3>
+<a name="toposort-elts-constraints-key-key-tie-breaker" class="anchor" href="#toposort-elts-constraints-key-key-tie-breaker"><span class="octicon octicon-link"></span></a><code>(toposort elts constraints &amp;key key tie-breaker)</code>
+</h3>
+
+<p>The topographical sort routine from AMOP.</p>
+
+<p>Takes a list of elements to sort, and a list of constraints, where each
+constraint is a two-element list.</p>
+
+<pre><code>(def dem-bones '((toe foot)
+                 (foot heel)
+                 (heel ankle)
+                 (ankle shin)
+                 (shin knee)
+                 (knee back)
+                 (back shoulder)
+                 (shoulder neck)
+                 (neck head)))
+(toposort (shuffle (mapcar #'car dem-bones))
+          dem-bones)
+=&gt; (TOE FOOT HEEL ANKLE SHIN KNEE BACK SHOULDER NECK)
+</code></pre>
+
+<p>If the graph is inconsistent, signals an error of type
+<code>inconsistent-graph</code>:</p>
+
+<pre><code>(toposort '(chicken egg) '((chicken egg) (egg chicken)))
+=&gt; Inconsistent graph: ((CHICKEN EGG) (EGG CHICKEN))
+</code></pre>
+
+<h3>
+<a name="powerset-set" class="anchor" href="#powerset-set"><span class="octicon octicon-link"></span></a><code>(powerset set)</code>
+</h3>
+
+<p>Return the powerset of SET.
+Uses a non-recursive algorithm.</p>
+
+<h3>
+<a name="efface-item-list" class="anchor" href="#efface-item-list"><span class="octicon octicon-link"></span></a><code>(efface item list)</code>
+</h3>
+
+<p>Destructively remove only the first occurence of ITEM in LIST.</p>
+
+<p>From Lisp 1.5.</p>
+
+<h3>
+<a name="pop-assoc-key-alist-rest-args" class="anchor" href="#pop-assoc-key-alist-rest-args"><span class="octicon octicon-link"></span></a><code>(pop-assoc key alist &amp;rest args)</code>
+</h3>
+
+<p>Like <code>assoc</code> but, if there was a match, delete it from ALIST.</p>
+
+<p>From Newlisp.</p>
+
+<h3>
+<a name="mapcar-into-fn-list" class="anchor" href="#mapcar-into-fn-list"><span class="octicon octicon-link"></span></a><code>(mapcar-into fn list)</code>
+</h3>
+
+<p>Like (map-into list fn list).</p>
+
+<p>From PAIP.</p>
+
+<h3>
+<a name="nthrest-n-list" class="anchor" href="#nthrest-n-list"><span class="octicon octicon-link"></span></a><code>(nthrest n list)</code>
+</h3>
+
+<p>Alias for <code>nthcdr</code>.</p>
+
+<h3>
+<a name="deltas-list-optional-op" class="anchor" href="#deltas-list-optional-op"><span class="octicon octicon-link"></span></a><code>(deltas list &amp;optional op)</code>
+</h3>
+
+<p>Return the successive differences in LIST.</p>
+
+<pre><code> (deltas '(4 9 -5 1 2))
+ =&gt; '(4 5 -14 6 1)
+</code></pre>
+
+<p>From Q.</p>
+
+<h2>
+<a name="trees" class="anchor" href="#trees"><span class="octicon octicon-link"></span></a>Trees</h2>
+
+<h3>
+<a name="walk-tree-fun-tree-optional-tag" class="anchor" href="#walk-tree-fun-tree-optional-tag"><span class="octicon octicon-link"></span></a><code>(walk-tree fun tree &amp;optional tag)</code>
+</h3>
+
+<p>Call FUN in turn over each atom and cons of TREE.</p>
+
+<p>FUN can skip the current subtree with (throw TAG nil).</p>
+
+<h3>
+<a name="map-tree-fun-tree-optional-tag" class="anchor" href="#map-tree-fun-tree-optional-tag"><span class="octicon octicon-link"></span></a><code>(map-tree fun tree &amp;optional tag)</code>
+</h3>
+
+<p>Walk FUN over TREE and build a tree from the results.</p>
+
+<p>The new tree may share structure with the old tree.</p>
+
+<pre><code> (eq tree (map-tree #'identity tree)) =&gt; T
+</code></pre>
+
+<p>FUN can skip the current subtree with (throw TAG SUBTREE), in which
+case SUBTREE will be used as the value of the subtree.</p>
+
+<h3>
+<a name="leaf-walk-fun-tree" class="anchor" href="#leaf-walk-fun-tree"><span class="octicon octicon-link"></span></a><code>(leaf-walk fun tree)</code>
+</h3>
+
+<p>Call FUN on each leaf of TREE.</p>
+
+<h3>
+<a name="leaf-map-fn-tree" class="anchor" href="#leaf-map-fn-tree"><span class="octicon octicon-link"></span></a><code>(leaf-map fn tree)</code>
+</h3>
+
+<p>Call FN on each leaf of TREE.
+Return a new tree possibly sharing structure with TREE.</p>
+
+<h3>
+<a name="occurs-if-test-tree-key-key" class="anchor" href="#occurs-if-test-tree-key-key"><span class="octicon octicon-link"></span></a><code>(occurs-if test tree &amp;key key)</code>
+</h3>
+
+<p>Is there a node (leaf or cons) in TREE that satisfies TEST?</p>
+
+<h3>
+<a name="prune-if-test-tree-key-key" class="anchor" href="#prune-if-test-tree-key-key"><span class="octicon octicon-link"></span></a><code>(prune-if test tree &amp;key key)</code>
+</h3>
+
+<p>Remove any atoms satisfying TEST from TREE.</p>
+
+<h3>
+<a name="occurs-leaf-tree-key-key-test" class="anchor" href="#occurs-leaf-tree-key-key-test"><span class="octicon octicon-link"></span></a><code>(occurs leaf tree &amp;key key test)</code>
+</h3>
+
+<p>Is LEAF present in TREE?</p>
+
+<h3>
+<a name="prune-leaf-tree-key-key-test" class="anchor" href="#prune-leaf-tree-key-key-test"><span class="octicon octicon-link"></span></a><code>(prune leaf tree &amp;key key test)</code>
+</h3>
+
+<p>Remove LEAF from TREE wherever it occurs.</p>
+
+<h2>
+<a name="strings" class="anchor" href="#strings"><span class="octicon octicon-link"></span></a>Strings</h2>
+
+<h3>
+<a name="whitespacep-char" class="anchor" href="#whitespacep-char"><span class="octicon octicon-link"></span></a><code>(whitespacep char)</code>
+</h3>
+
+<p>Is CHAR whitespace?</p>
+
+<p>Spaces, tabs, any kind of line break, page breaks, and no-break spaces
+are considered whitespace.</p>
+
+<h3>
+<a name="trim-whitespace-string" class="anchor" href="#trim-whitespace-string"><span class="octicon octicon-link"></span></a><code>(trim-whitespace string)</code>
+</h3>
+
+<p>STRING without whitespace at ends.</p>
+
+<h3>
+<a name="with-string-var-optional-stream-body-body" class="anchor" href="#with-string-var-optional-stream-body-body"><span class="octicon octicon-link"></span></a><code>(with-string (var &amp;optional stream) &amp;body body)</code>
+</h3>
+
+<p>Bind VAR to the character stream designated by STREAM.</p>
+
+<p>STREAM is resolved like the DESTINATION argument to <code>format</code>: it can
+be any of t (for <code>*standard-output*</code>), nil (for a string stream), a
+string with a fill pointer, or a stream to be used directly.</p>
+
+<p>When possible, it is a good idea for functions that return strings to
+take a stream to write to, so callers can avoid consing a string just
+to write it to a stream. This macro makes it easy to write such
+functions.</p>
+
+<pre><code>(defun format-x (x &amp;key stream)
+  (with-string (s stream)
+    ...))
+</code></pre>
+
+<h3>
+<a name="collapse-whitespace-string" class="anchor" href="#collapse-whitespace-string"><span class="octicon octicon-link"></span></a><code>(collapse-whitespace string)</code>
+</h3>
+
+<p>Collapse runs of whitespace in STRING.
+Each run of space, newline, and other whitespace characters is
+replaced by a single space character.</p>
+
+<h3>
+<a name="blankp-seq" class="anchor" href="#blankp-seq"><span class="octicon octicon-link"></span></a><code>(blankp seq)</code>
+</h3>
+
+<p>SEQ is either empty, or consists entirely of characters that
+satisfy <code>whitespacep</code>.</p>
+
+<h3>
+<a name="concat-rest-strings" class="anchor" href="#concat-rest-strings"><span class="octicon octicon-link"></span></a><code>(concat &amp;rest strings)</code>
+</h3>
+
+<p>Abbreviation for (concatenate 'string ...).</p>
+
+<p>From Emacs Lisp.</p>
+
+<h3>
+<a name="mapconcat-fun-seq-separator-key-stream" class="anchor" href="#mapconcat-fun-seq-separator-key-stream"><span class="octicon octicon-link"></span></a><code>(mapconcat fun seq separator &amp;key stream)</code>
+</h3>
+
+<p>Build a string by mapping FUN over SEQ.
+Separate each value with SEPARATOR.</p>
+
+<p>Equivalent to
+        (reduce #'concat (intersperse SEP SEQ) :key FUN)
+but more efficient.</p>
+
+<p>From Emacs Lisp.</p>
+
+<h3>
+<a name="join-strings-optional-sep" class="anchor" href="#join-strings-optional-sep"><span class="octicon octicon-link"></span></a><code>(join strings &amp;optional sep)</code>
+</h3>
+
+<p>Join STRINGS into one string, perhaps interspersing with SEP.</p>
+
+<h3>
+<a name="string-upcase-initials-string" class="anchor" href="#string-upcase-initials-string"><span class="octicon octicon-link"></span></a><code>(string-upcase-initials string)</code>
+</h3>
+
+<p>Return STRING with the first letter of each word capitalized.
+This differs from CAPITALIZE in that the other characters in each word
+are not changed.</p>
+
+<pre><code> (capitalize "an ACRONYM") -&gt; "An Acronym")
+ (string-upcase-initials "an ACRONYM") -&gt; "An ACRONYM")
+</code></pre>
+
+<p>From Emacs Lisp (where it is simply <code>upcase-initials</code>).</p>
+
+<h3>
+<a name="nstring-upcase-initials-string" class="anchor" href="#nstring-upcase-initials-string"><span class="octicon octicon-link"></span></a><code>(nstring-upcase-initials string)</code>
+</h3>
+
+<p>Destructive version of <code>string-upcase-initials</code>.</p>
+
+<h3>
+<a name="nstring-invert-case-string" class="anchor" href="#nstring-invert-case-string"><span class="octicon octicon-link"></span></a><code>(nstring-invert-case string)</code>
+</h3>
+
+<p>Destructive version of <code>string-invert-case</code>.</p>
+
+<h3>
+<a name="string-invert-case-string" class="anchor" href="#string-invert-case-string"><span class="octicon octicon-link"></span></a><code>(string-invert-case string)</code>
+</h3>
+
+<p>Invert the case of STRING.
+This does the same thing as a case-inverting readtable.</p>
+
+<h3>
+<a name="words-string-key-start-end" class="anchor" href="#words-string-key-start-end"><span class="octicon octicon-link"></span></a><code>(words string &amp;key start end)</code>
+</h3>
+
+<p>Split STRING into words.</p>
+
+<p>The definition of a word is the same as that used by
+<code>string-capitalize</code>: a run of alphanumeric characters.</p>
+
+<pre><code>(words "Four score and seven years")
+=&gt; ("Four" "score" "and" "seven" "years")
+
+(words "2 words")
+=&gt; ("2" "words")
+
+(words "two_words")
+=&gt; ("two" "words")
+
+(words "\"I'm here,\" Tom said presently.")
+=&gt; ("I" "m" "here" "Tom" "said" "presently")
+</code></pre>
+
+<p>Cf. <code>tokens</code>.</p>
+
+<h3>
+<a name="tokens-string-key-start-end" class="anchor" href="#tokens-string-key-start-end"><span class="octicon octicon-link"></span></a><code>(tokens string &amp;key start end)</code>
+</h3>
+
+<p>Separate STRING into tokens.
+Tokens are runs of non-whitespace characters.</p>
+
+<pre><code>(tokens "\"I'm here,\" Tom said presently.")
+=&gt; ("\"I'm" "here,\"" "Tom" "said" "presently.")
+</code></pre>
+
+<p>Cf. <code>words</code>.</p>
+
+<h3>
+<a name="lines-string" class="anchor" href="#lines-string"><span class="octicon octicon-link"></span></a><code>(lines string)</code>
+</h3>
+
+<p>A list of lines in STRING.</p>
+
+<h3>
+<a name="fmt-control-string-rest-args" class="anchor" href="#fmt-control-string-rest-args"><span class="octicon octicon-link"></span></a><code>(fmt control-string &amp;rest args)</code>
+</h3>
+
+<p>A cousin of <code>format</code> expressly for fast formatting of strings.</p>
+
+<p>Like (format nil ...), binding <code>*pretty-pretty*</code> to <code>nil</code>, which in
+some Lisps means a significant increase in speed.</p>
+
+<p>Has a compiler macro with <code>formatter</code>.</p>
+
+<h3>
+<a name="downcase-x" class="anchor" href="#downcase-x"><span class="octicon octicon-link"></span></a><code>(downcase x)</code>
+</h3>
+
+<p>Downcase a string or character.</p>
+
+<h3>
+<a name="upcase-x" class="anchor" href="#upcase-x"><span class="octicon octicon-link"></span></a><code>(upcase x)</code>
+</h3>
+
+<p>Upcase a string or character.</p>
+
+<h3>
+<a name="capitalize-x" class="anchor" href="#capitalize-x"><span class="octicon octicon-link"></span></a><code>(capitalize x)</code>
+</h3>
+
+<p>Capitalize a string or character.</p>
+
+<h3>
+<a name="escape-string-table-key-start-end-stream" class="anchor" href="#escape-string-table-key-start-end-stream"><span class="octicon octicon-link"></span></a><code>(escape string table &amp;key start end stream)</code>
+</h3>
+
+<p>Write STRING to STREAM, escaping with TABLE.</p>
+
+<p>TABLE should be either a hash table, with characters for keys and
+strings for values, or a function that takes a character and returns a
+string.</p>
+
+<h3>
+<a name="ellipsize-string-n-key-ellipsis" class="anchor" href="#ellipsize-string-n-key-ellipsis"><span class="octicon octicon-link"></span></a><code>(ellipsize string n &amp;key ellipsis)</code>
+</h3>
+
+<p>If STRING is longer than N, truncate it and append ELLIPSIS.</p>
+
+<p>Note that the resulting string is longer than N by the length of
+ELLIPSIS, so the string may come out longer than it started.</p>
+
+<pre><code> (ellipsize "abc" 2)
+ =&gt; "ab..."
+</code></pre>
+
+<p>From Arc.</p>
+
+<h3>
+<a name="string-prefixp-s1-s2-key-start1-end1-start2-end2" class="anchor" href="#string-prefixp-s1-s2-key-start1-end1-start2-end2"><span class="octicon octicon-link"></span></a><code>(string-prefixp s1 s2 &amp;key start1 end1 start2 end2)</code>
+</h3>
+
+<p>Like <code>string^=</code>, but case-insensitive.</p>
+
+<h3>
+<a name="string-s1-s2-key-start1-end1-start2-end2" class="anchor" href="#string-s1-s2-key-start1-end1-start2-end2"><span class="octicon octicon-link"></span></a><code>(string^= s1 s2 &amp;key start1 end1 start2 end2)</code>
+</h3>
+
+<p>Is S1 a prefix of S2?</p>
+
+<h3>
+<a name="string-s1-s2-key-start1-end1-start2-end2-1" class="anchor" href="#string-s1-s2-key-start1-end1-start2-end2-1"><span class="octicon octicon-link"></span></a><code>(string$= s1 s2 &amp;key start1 end1 start2 end2)</code>
+</h3>
+
+<p>Is S1 a suffix of S2?</p>
+
+<h3>
+<a name="string-suffixp-s1-s2-key-start1-end1-start2-end2" class="anchor" href="#string-suffixp-s1-s2-key-start1-end1-start2-end2"><span class="octicon octicon-link"></span></a><code>(string-suffixp s1 s2 &amp;key start1 end1 start2 end2)</code>
+</h3>
+
+<p>Like <code>string$=</code>, but case-insensitive.</p>
+
+<h3>
+<a name="string-containsp-s1-s2-key-start1-end1-start2-end2" class="anchor" href="#string-containsp-s1-s2-key-start1-end1-start2-end2"><span class="octicon octicon-link"></span></a><code>(string-containsp s1 s2 &amp;key start1 end1 start2 end2)</code>
+</h3>
+
+<p>Like <code>string*=</code>, but case-insensitive.</p>
+
+<h3>
+<a name="string-s1-s2-key-start1-end1-start2-end2-2" class="anchor" href="#string-s1-s2-key-start1-end1-start2-end2-2"><span class="octicon octicon-link"></span></a><code>(string*= s1 s2 &amp;key start1 end1 start2 end2)</code>
+</h3>
+
+<p>Is S1 a substring of S2?</p>
+
+<p>This is similar, but not identical, to SEARCH.</p>
+
+<pre><code> (search nil "foo") =&gt; T
+ (search "nil" "nil") =&gt; NIL
+ (string*= nil "foo") =&gt; NIL
+ (string*= nil "nil") =&gt; T
+</code></pre>
+
+<h3>
+<a name="string-s1-s2-key-start1-end1-start2-end2-3" class="anchor" href="#string-s1-s2-key-start1-end1-start2-end2-3"><span class="octicon octicon-link"></span></a><code>(string~= s1 s2 &amp;key start1 end1 start2 end2)</code>
+</h3>
+
+<p>Does S1 occur in S2 as a token?</p>
+
+<p>This is equivalent to
+     (find S1 (tokens S2) :test #'string=),
+but without consing.</p>
+
+<h3>
+<a name="string-tokenp-s1-s2-key-start1-end1-start2-end2" class="anchor" href="#string-tokenp-s1-s2-key-start1-end1-start2-end2"><span class="octicon octicon-link"></span></a><code>(string-tokenp s1 s2 &amp;key start1 end1 start2 end2)</code>
+</h3>
+
+<p>Like <code>string~=</code>, but case-insensitive.</p>
+
+<h3>
+<a name="string-replace-all-old-string-new-key-start-end-stream" class="anchor" href="#string-replace-all-old-string-new-key-start-end-stream"><span class="octicon octicon-link"></span></a><code>(string-replace-all old string new &amp;key start end stream)</code>
+</h3>
+
+<p>Do regex-style search-and-replace for constant strings.</p>
+
+<p>Note that START and END only affect where the replacements are made:
+the part of the string before START, and the part after END, are
+always included verbatim.</p>
+
+<pre><code> (string-replace-all "old" "The old old way" "new"
+                     :start 3 :end 6)
+ =&gt; "The new old way"
+</code></pre>
+
+<h2>
+<a name="hash-tables" class="anchor" href="#hash-tables"><span class="octicon octicon-link"></span></a>Hash Tables</h2>
+
+<h3>
+<a name="dict-rest-keys-and-values" class="anchor" href="#dict-rest-keys-and-values"><span class="octicon octicon-link"></span></a><code>(dict &amp;rest keys-and-values)</code>
+</h3>
+
+<p>A concise constructor for hash tables.</p>
+
+<p>By default, return an 'equal hash table containing each successive
+pair of keys and values from KEYS-AND-VALUES.</p>
+
+<p>If the number of KEYS-AND-VALUES is odd, then the first argument is
+understood as the test.</p>
+
+<pre><code> (gethash "string" (dict "string" t)) =&gt; t
+ (gethash "string" (dict 'eq "string" t)) =&gt; nil
+</code></pre>
+
+<h3>
+<a name="dict-dict-rest-args" class="anchor" href="#dict-dict-rest-args"><span class="octicon octicon-link"></span></a><code>(dict* dict &amp;rest args)</code>
+</h3>
+
+<p>Merge new bindings into DICT.
+Roughly equivalent to `(merge-tables DICT (dict args...))'.</p>
+
+<h3>
+<a name="href-table-rest-keys" class="anchor" href="#href-table-rest-keys"><span class="octicon octicon-link"></span></a><code>(href table &amp;rest keys)</code>
+</h3>
+
+<p>A concise way of doings lookups in (potentially nested) hash tables.</p>
+
+<pre><code>(href (dict :x 1) :x) =&gt; x
+(href (dict :x (dict :y 2)) :x :y)  =&gt; y
+</code></pre>
+
+<h3>
+<a name="href-default-default-table-rest-keys" class="anchor" href="#href-default-default-table-rest-keys"><span class="octicon octicon-link"></span></a><code>(href-default default table &amp;rest keys)</code>
+</h3>
+
+<p>Like <code>href</code>, with a default.
+As soon as one of KEYS fails to match, DEFAULT is returned.</p>
+
+<h3>
+<a name="-table-key-rest-keys" class="anchor" href="#-table-key-rest-keys"><span class="octicon octicon-link"></span></a><code>(@ table key &amp;rest keys)</code>
+</h3>
+
+<p>A concise way of doings lookups in (potentially nested) hash tables.</p>
+
+<pre><code>(@ (dict :x 1) :x) =&gt; x
+(@ (dict :x (dict :y 2)) :x :y)  =&gt; y
+</code></pre>
+
+<h3>
+<a name="pophash-key-hash-table" class="anchor" href="#pophash-key-hash-table"><span class="octicon octicon-link"></span></a><code>(pophash key hash-table)</code>
+</h3>
+
+<p>Lookup KEY in HASH-TABLE, return its value, and remove it.
+From Zetalisp.</p>
+
+<h3>
+<a name="swaphash-key-value-hash-table" class="anchor" href="#swaphash-key-value-hash-table"><span class="octicon octicon-link"></span></a><code>(swaphash key value hash-table)</code>
+</h3>
+
+<p>Set KEY and VALUE in HASH-TABLE, returning the old values of KEY.
+From Zetalisp.</p>
+
+<h3>
+<a name="maphash-return-fn-hash-table" class="anchor" href="#maphash-return-fn-hash-table"><span class="octicon octicon-link"></span></a><code>(maphash-return fn hash-table)</code>
+</h3>
+
+<p>Like MAPHASH, but collect and return the values from FN.
+From Zetalisp.</p>
+
+<h3>
+<a name="merge-tables-table-rest-tables" class="anchor" href="#merge-tables-table-rest-tables"><span class="octicon octicon-link"></span></a><code>(merge-tables table &amp;rest tables)</code>
+</h3>
+
+<p>Merge TABLE and TABLES, working from left to right.
+The resulting hash table has the same test as TABLE.</p>
+
+<p>Clojure's <code>merge</code>.</p>
+
+<h3>
+<a name="flip-hash-table-table-key-test-key" class="anchor" href="#flip-hash-table-table-key-test-key"><span class="octicon octicon-link"></span></a><code>(flip-hash-table table &amp;key test key)</code>
+</h3>
+
+<p>Return a table like TABLE, but with keys and values flipped.</p>
+
+<p>TEST filters which values to set. KEY defaults to <code>identity</code>.</p>
+
+<h3>
+<a name="set-hash-table" class="anchor" href="#set-hash-table"><span class="octicon octicon-link"></span></a>`(set-hash-table</h3>
+
+<pre><code>  set
+  &amp;rest
+  hash-table-args
+  &amp;key
+  test
+  key
+  strict
+  &amp;allow-other-keys)`
+</code></pre>
+
+<p>Return SET, a list considered as a set, as a hash table.
+This is the equivalent of <code>alist-hash-table</code> and <code>plist-hash-table</code>
+for a list that denotes a set.</p>
+
+<p>STRICT determines whether to check that the list actually is a set.</p>
+
+<p>The resulting table has the members of SET for its keys and <code>t</code> for
+every value.</p>
+
+<h3>
+<a name="hash-table-set-table-key-strict" class="anchor" href="#hash-table-set-table-key-strict"><span class="octicon octicon-link"></span></a><code>(hash-table-set table &amp;key strict)</code>
+</h3>
+
+<p>Return the set denoted by TABLE.
+Given STRICT, check that each value is <code>t</code>.</p>
+
+<p>Without STRICT, equivalent to <code>hash-table-keys</code>.</p>
+
+<h2>
+<a name="files" class="anchor" href="#files"><span class="octicon octicon-link"></span></a>Files</h2>
+
+<h3>
+<a name="write-stream-into-file" class="anchor" href="#write-stream-into-file"><span class="octicon octicon-link"></span></a>`(write-stream-into-file</h3>
+
+<pre><code>  stream
+  pathname
+  &amp;key
+  if-exists
+  if-does-not-exist)`
+</code></pre>
+
+<p>Read STREAM and write the contents into PATHNAME.</p>
+
+<p>STREAM will be closed afterwards, so wrap it with
+<code>make-concatenated-stream</code> if you want it left open.</p>
+
+<h3>
+<a name="file-file1-file2-key-buffer-size" class="anchor" href="#file-file1-file2-key-buffer-size"><span class="octicon octicon-link"></span></a><code>(file= file1 file2 &amp;key buffer-size)</code>
+</h3>
+
+<p>Compare FILE1 and FILE2 octet by octet, using buffers of
+BUFFER-SIZE.</p>
+
+<h3>
+<a name="file-size-file-key-element-type" class="anchor" href="#file-size-file-key-element-type"><span class="octicon octicon-link"></span></a><code>(file-size file &amp;key element-type)</code>
+</h3>
+
+<p>The size of FILE.</p>
+
+<h3>
+<a name="delete-file-if-exists-file" class="anchor" href="#delete-file-if-exists-file"><span class="octicon octicon-link"></span></a><code>(delete-file-if-exists file)</code>
+</h3>
+
+<p>Delete FILE if it exists.</p>
+
+<h2>
+<a name="symbols" class="anchor" href="#symbols"><span class="octicon octicon-link"></span></a>Symbols</h2>
+
+<h3>
+<a name="find-keyword-string" class="anchor" href="#find-keyword-string"><span class="octicon octicon-link"></span></a><code>(find-keyword string)</code>
+</h3>
+
+<p>If STRING has been interned as a keyword, return it.</p>
+
+<p>Like <code>make-keyword</code>, but preferable in most cases, because it doesn't
+intern a keyword -- which is usually both unnecessary and unwise.</p>
+
+<h3>
+<a name="bound-value-s-optional-default" class="anchor" href="#bound-value-s-optional-default"><span class="octicon octicon-link"></span></a><code>(bound-value s &amp;optional default)</code>
+</h3>
+
+<p>If S is bound, return (values s t). Otherwise, return DEFAULT.</p>
+
+<h3>
+<a name="special-variable-p-symbol" class="anchor" href="#special-variable-p-symbol"><span class="octicon octicon-link"></span></a><code>(special-variable-p symbol)</code>
+</h3>
+
+<p>Is SYMBOL a special variable?</p>
+
+<h2>
+<a name="arrays" class="anchor" href="#arrays"><span class="octicon octicon-link"></span></a>Arrays</h2>
+
+<h3>
+<a name="array-index-row-major-array-row-major-index" class="anchor" href="#array-index-row-major-array-row-major-index"><span class="octicon octicon-link"></span></a><code>(array-index-row-major array row-major-index)</code>
+</h3>
+
+<p>The inverse of ARRAY-ROW-MAJOR-INDEX.</p>
+
+<p>Given an array and a row-major index, return a list of subscripts.</p>
+
+<pre><code> (apply #'aref (array-index-row-major i))
+ ≡ (array-row-major-aref i)
+</code></pre>
+
+<h2>
+<a name="queue" class="anchor" href="#queue"><span class="octicon octicon-link"></span></a>Queue</h2>
+
+<h3>
+<a name="queuep-x" class="anchor" href="#queuep-x"><span class="octicon octicon-link"></span></a><code>(queuep x)</code>
+</h3>
+
+<p>Is X a queue?</p>
+
+<h3>
+<a name="queue-rest-initial-contents" class="anchor" href="#queue-rest-initial-contents"><span class="octicon octicon-link"></span></a><code>(queue &amp;rest initial-contents)</code>
+</h3>
+
+<p>Build a new queue with INITIAL-CONTENTS.</p>
+
+<h3>
+<a name="clear-queue-queue" class="anchor" href="#clear-queue-queue"><span class="octicon octicon-link"></span></a><code>(clear-queue queue)</code>
+</h3>
+
+<p>Return QUEUE's contents and reset it.</p>
+
+<h3>
+<a name="qlen-queue" class="anchor" href="#qlen-queue"><span class="octicon octicon-link"></span></a><code>(qlen queue)</code>
+</h3>
+
+<p>The number of items in QUEUE.</p>
+
+<h3>
+<a name="qlist-queue" class="anchor" href="#qlist-queue"><span class="octicon octicon-link"></span></a><code>(qlist queue)</code>
+</h3>
+
+<p>A list of the times in QUEUE.</p>
+
+<h3>
+<a name="enq-item-queue" class="anchor" href="#enq-item-queue"><span class="octicon octicon-link"></span></a><code>(enq item queue)</code>
+</h3>
+
+<p>Insert ITEM at end of QUEUE.</p>
+
+<h3>
+<a name="deq-queue" class="anchor" href="#deq-queue"><span class="octicon octicon-link"></span></a><code>(deq queue)</code>
+</h3>
+
+<p>Remove item from the front of the QUEUE.</p>
+
+<h3>
+<a name="front-queue" class="anchor" href="#front-queue"><span class="octicon octicon-link"></span></a><code>(front queue)</code>
+</h3>
+
+<p>The first element in QUEUE.</p>
+
+<h3>
+<a name="queue-empty-p-queue" class="anchor" href="#queue-empty-p-queue"><span class="octicon octicon-link"></span></a><code>(queue-empty-p queue)</code>
+</h3>
+
+<p>Is QUEUE empty?</p>
+
+<h3>
+<a name="qconc-queue-list" class="anchor" href="#qconc-queue-list"><span class="octicon octicon-link"></span></a><code>(qconc queue list)</code>
+</h3>
+
+<p>Destructively concatenate LIST onto the end of QUEUE.</p>
+
+<h2>
+<a name="box" class="anchor" href="#box"><span class="octicon octicon-link"></span></a>Box</h2>
+
+<h3>
+<a name="box-value" class="anchor" href="#box-value"><span class="octicon octicon-link"></span></a><code>(box value)</code>
+</h3>
+
+<p>Box a value.</p>
+
+<h3>
+<a name="unbox-x" class="anchor" href="#unbox-x"><span class="octicon octicon-link"></span></a><code>(unbox x)</code>
+</h3>
+
+<p>The value in the box X.</p>
+
+<h2>
+<a name="sequences" class="anchor" href="#sequences"><span class="octicon octicon-link"></span></a>Sequences</h2>
+
+<h3>
+<a name="nsubseq-seq-start-optional-end" class="anchor" href="#nsubseq-seq-start-optional-end"><span class="octicon octicon-link"></span></a><code>(nsubseq seq start &amp;optional end)</code>
+</h3>
+
+<p>Return a subsequence that may share structure with SEQ.</p>
+
+<p>Note that <code>nsubseq</code> gets its aposematic leading <code>n</code> not because it is
+itself destructive, but because, unlike <code>subseq</code>, destructive
+operations on the subsequence returned may mutate the original.</p>
+
+<p><code>nsubseq</code> also works with <code>setf</code>, with the same behavior as
+<code>replace</code>.</p>
+
+<h3>
+<a name="filter-pred" class="anchor" href="#filter-pred"><span class="octicon octicon-link"></span></a>`(filter pred</h3>
+
+<pre><code>        seq
+        &amp;rest
+        args
+        &amp;key
+        count
+        from-end
+        start
+        end
+        key
+        &amp;allow-other-keys)`
+</code></pre>
+
+<p>Almost the opposite of <code>remove-if-not</code>.
+The difference is the handling of COUNT.</p>
+
+<h3>
+<a name="keep-item" class="anchor" href="#keep-item"><span class="octicon octicon-link"></span></a>`(keep item</h3>
+
+<pre><code>      seq
+      &amp;rest
+      args
+      &amp;key
+      test
+      from-end
+      count
+      &amp;allow-other-keys)`
+</code></pre>
+
+<p>Almost the opposite of <code>remove</code>.
+Keep only those items in SEQ that are equivalent, under TEST and KEY,
+to ITEM.</p>
+
+<p>The difference is the handling of COUNT.</p>
+
+<h3>
+<a name="single-seq" class="anchor" href="#single-seq"><span class="octicon octicon-link"></span></a><code>(single seq)</code>
+</h3>
+
+<p>Is SEQ a sequence of one element?</p>
+
+<h3>
+<a name="partition-pred-seq-key-start-end-key" class="anchor" href="#partition-pred-seq-key-start-end-key"><span class="octicon octicon-link"></span></a><code>(partition pred seq &amp;key start end key)</code>
+</h3>
+
+<p>Partition elements of SEQ into those for which PRED returns true
+and false.</p>
+
+<p>Return two values, one with each sequence.</p>
+
+<p>Exactly equivalent to:
+     (values (remove-if predicate seq) (remove-if-not predicate seq))
+except it visits each element only once.</p>
+
+<p>Note that <code>partition</code> is not just <code>assort</code> with an up-or-down
+predicate. <code>assort</code> returns its groupings in the order they occur in
+the sequence; <code>partition</code> always returns the “true” elements first.</p>
+
+<pre><code>(assort '(1 2 3) :key #'evenp) =&gt; ((1 3) (2))
+(partition #'evenp '(1 2 3)) =&gt; (2), (1 3)
+</code></pre>
+
+<h3>
+<a name="partitions-preds-seq-key-start-end-key" class="anchor" href="#partitions-preds-seq-key-start-end-key"><span class="octicon octicon-link"></span></a><code>(partitions preds seq &amp;key start end key)</code>
+</h3>
+
+<p>Generalized version of PARTITION.</p>
+
+<p>PREDS is a list of predicates. For each predicate, <code>partitions</code>
+returns a filtered copy of SEQ. As a second value, it returns an extra
+sequence of the items that do not match any predicate.</p>
+
+<p>Items are assigned to the first predicate they match.</p>
+
+<h3>
+<a name="assort-seq-key-key-test-start-end" class="anchor" href="#assort-seq-key-key-test-start-end"><span class="octicon octicon-link"></span></a><code>(assort seq &amp;key key test start end)</code>
+</h3>
+
+<p>Return SEQ assorted by KEY.</p>
+
+<pre><code> (assort (iota 10)
+         :key (lambda (n) (mod n 3)))
+ =&gt; '((0 3 6 9) (1 4 7) (2 5 8))
+</code></pre>
+
+<p>You can think of <code>assort</code> as being akin to <code>remove-duplicates</code>:</p>
+
+<pre><code> (mapcar #'first (assort list))
+ ≡ (remove-duplicates list :from-end t)
+</code></pre>
+
+<h3>
+<a name="runs-seq-key-start-end-key-test" class="anchor" href="#runs-seq-key-start-end-key-test"><span class="octicon octicon-link"></span></a><code>(runs seq &amp;key start end key test)</code>
+</h3>
+
+<p>Return a list of runs of similar elements in SEQ.
+The arguments START, END, and KEY are as for <code>reduce</code>.</p>
+
+<pre><code>(runs '(head tail head head tail))
+=&gt; '((head) (tail) (head head) (tail))
+</code></pre>
+
+<h3>
+<a name="batches-seq-n-key-start-end" class="anchor" href="#batches-seq-n-key-start-end"><span class="octicon octicon-link"></span></a><code>(batches seq n &amp;key start end)</code>
+</h3>
+
+<p>Return SEQ in batches of N elements.</p>
+
+<pre><code>(batches (iota 11) 2)
+=&gt; ((0 1) (2 3) (4 5) (6 7) (8 9) (10))
+</code></pre>
+
+<h3>
+<a name="safe-sort-seq-pred-rest-args" class="anchor" href="#safe-sort-seq-pred-rest-args"><span class="octicon octicon-link"></span></a><code>(safe-sort seq pred &amp;rest args)</code>
+</h3>
+
+<p>Like <code>sort</code>, but not destructive.</p>
+
+<h3>
+<a name="sortf-g11779-pred-rest-args" class="anchor" href="#sortf-g11779-pred-rest-args"><span class="octicon octicon-link"></span></a><code>(sortf g11779 pred &amp;rest args)</code>
+</h3>
+
+<p>Sort a place with <code>sort</code>.</p>
+
+<h3>
+<a name="frequencies-seq-rest-hash-table-args" class="anchor" href="#frequencies-seq-rest-hash-table-args"><span class="octicon octicon-link"></span></a><code>(frequencies seq &amp;rest hash-table-args)</code>
+</h3>
+
+<p>Return a hash table with the count of each unique item in SEQ.</p>
+
+<p>From Clojure.</p>
+
+<h3>
+<a name="nub-seq-rest-args-key-start-end-key-test" class="anchor" href="#nub-seq-rest-args-key-start-end-key-test"><span class="octicon octicon-link"></span></a><code>(nub seq &amp;rest args &amp;key start end key test)</code>
+</h3>
+
+<p>Remove duplicates from SEQ, starting from the end.
+TEST defaults to <code>equal</code>.</p>
+
+<p>From Haskell.</p>
+
+<h3>
+<a name="gcp-seqs-key-test" class="anchor" href="#gcp-seqs-key-test"><span class="octicon octicon-link"></span></a><code>(gcp seqs &amp;key test)</code>
+</h3>
+
+<p>The greatest common prefix of SEQS.</p>
+
+<h3>
+<a name="gcs-seqs-key-test" class="anchor" href="#gcs-seqs-key-test"><span class="octicon octicon-link"></span></a><code>(gcs seqs &amp;key test)</code>
+</h3>
+
+<p>The greatest common suffix of SEQS.</p>
+
+<h3>
+<a name="length-seq-n" class="anchor" href="#length-seq-n"><span class="octicon octicon-link"></span></a><code>(length&lt; seq n)</code>
+</h3>
+
+<p>Is SEQ less than N elements long?</p>
+
+<h3>
+<a name="length-seq-n-1" class="anchor" href="#length-seq-n-1"><span class="octicon octicon-link"></span></a><code>(length&gt; seq n)</code>
+</h3>
+
+<p>Is SEQ more than N elements long?</p>
+
+<h3>
+<a name="length-seq-n-2" class="anchor" href="#length-seq-n-2"><span class="octicon octicon-link"></span></a><code>(length&gt;= seq n)</code>
+</h3>
+
+<p>Is SEQ at least N elements long?</p>
+
+<h3>
+<a name="length-seq-n-3" class="anchor" href="#length-seq-n-3"><span class="octicon octicon-link"></span></a><code>(length&lt;= seq n)</code>
+</h3>
+
+<p>Is SEQ no more than N elements long?</p>
+
+<h3>
+<a name="longer-x-y" class="anchor" href="#longer-x-y"><span class="octicon octicon-link"></span></a><code>(longer x y)</code>
+</h3>
+
+<p>Return the longer of X and Y.</p>
+
+<p>If X and Y are of equal length, return X.</p>
+
+<h3>
+<a name="longest-seqs" class="anchor" href="#longest-seqs"><span class="octicon octicon-link"></span></a><code>(longest seqs)</code>
+</h3>
+
+<p>Return the longest seq in SEQS.</p>
+
+<h3>
+<a name="cut-seq-indices" class="anchor" href="#cut-seq-indices"><span class="octicon octicon-link"></span></a><code>(cut seq indices)</code>
+</h3>
+
+<p>Divide up SEQ at INDICES.</p>
+
+<pre><code> (cut (iota 8) '(2 4 6))
+ =&gt; ((0 1) (2 3) (4 5) (6 7))
+</code></pre>
+
+<p>From Q.</p>
+
+<h3>
+<a name="slice-seq-start-optional-end" class="anchor" href="#slice-seq-start-optional-end"><span class="octicon octicon-link"></span></a><code>(slice seq start &amp;optional end)</code>
+</h3>
+
+<p>Like <code>subseq</code>, but allows negative bounds to specify offsets.
+Both START and END accept negative bounds.</p>
+
+<pre><code> (slice "string" -3 -1) =&gt; "in"
+</code></pre>
+
+<p>Setf of <code>slice</code> is like setf of <code>ldb</code>: afterwards, the place being set
+holds a new sequence which is not EQ to the old.</p>
+
+<h3>
+<a name="ordering-seq-key-unordered-to-end-from-end-test" class="anchor" href="#ordering-seq-key-unordered-to-end-from-end-test"><span class="octicon octicon-link"></span></a><code>(ordering seq &amp;key unordered-to-end from-end test)</code>
+</h3>
+
+<p>Given a sequence, return a function that, when called with <code>sort</code>,
+restores the original order of the sequence.</p>
+
+<p>That is, for any SEQ (without duplicates), it is always true that</p>
+
+<pre><code> (equal seq (sort (shuffle (copy-seq seq)) (ordering seq)))
+</code></pre>
+
+<p>FROM-END controls what to do in case of duplicates. If FROM-END is
+true, the last occurrence of each item is preserved; otherwise, only
+the first occurrence counts.</p>
+
+<p>TEST controls identity; it should be a valid test for a hash table.</p>
+
+<p>UNORDERED-TO-END controls where to sort items that are not present in
+the original ordering. By default they are sorted first but, if
+UNORDERED-TO-END is true, they are sorted last. In either case, they
+are left in no particular order.</p>
+
+<h3>
+<a name="bestn-n-seq-pred-key-key" class="anchor" href="#bestn-n-seq-pred-key-key"><span class="octicon octicon-link"></span></a><code>(bestn n seq pred &amp;key key)</code>
+</h3>
+
+<p>Partial sorting.
+Equivalent to (firstn N (sort SEQ PRED)), but much faster, at least
+for small values of N.</p>
+
+<p>The name is from Arc.</p>
+
+<h3>
+<a name="extrema-seq-pred-key-key-start-end" class="anchor" href="#extrema-seq-pred-key-key-start-end"><span class="octicon octicon-link"></span></a><code>(extrema seq pred &amp;key key start end)</code>
+</h3>
+
+<p>Like EXTREMUM, but returns both the minimum and the maximum (as two
+values).</p>
+
+<pre><code> (extremum (iota 10) #'&gt;) =&gt; 9
+ (extrema (iota 10) #'&gt;) =&gt; 9, 0
+</code></pre>
+
+<h3>
+<a name="vector-v1-v2-key-test-start1-end1-start2-end2" class="anchor" href="#vector-v1-v2-key-test-start1-end1-start2-end2"><span class="octicon octicon-link"></span></a><code>(vector= v1 v2 &amp;key test start1 end1 start2 end2)</code>
+</h3>
+
+<p>Like <code>string=</code> for any vector.</p>
+
+<h3>
+<a name="take-n-seq" class="anchor" href="#take-n-seq"><span class="octicon octicon-link"></span></a><code>(take n seq)</code>
+</h3>
+
+<p>Return the first N elements of SEQ, as a <em>new</em> sequence of the same
+type as SEQ.</p>
+
+<h3>
+<a name="drop-n-seq" class="anchor" href="#drop-n-seq"><span class="octicon octicon-link"></span></a><code>(drop n seq)</code>
+</h3>
+
+<p>Return all but the first N elements of SEQ.
+The sequence returned is a new sequence of the same type as SEQ.</p>
+
+<h3>
+<a name="halves-seq-optional-split" class="anchor" href="#halves-seq-optional-split"><span class="octicon octicon-link"></span></a><code>(halves seq &amp;optional split)</code>
+</h3>
+
+<p>Return, as two values, the first and second halves of SEQ.
+SPLIT designates where to split SEQ; it defaults to half the length,
+but can be specified.</p>
+
+<p>If SEQ is of an odd length, the split is made using <code>ceiling</code> rather
+than <code>truncate</code>. This is on the theory that, if SEQ is a
+single-element list, it should be returned unchanged.</p>
+
+<h2>
+<a name="numbers" class="anchor" href="#numbers"><span class="octicon octicon-link"></span></a>Numbers</h2>
+
+<h3>
+<a name="finc-place-optional-delta-1" class="anchor" href="#finc-place-optional-delta-1"><span class="octicon octicon-link"></span></a><code>(finc place &amp;optional (delta 1))</code>
+</h3>
+
+<p>Like <code>incf</code>, but returns the old value instead of the new.</p>
+
+<p>An alternative to using -1 as the starting value of a counter, which
+can prevent optimization.</p>
+
+<h3>
+<a name="fdec-place-optional-delta-1" class="anchor" href="#fdec-place-optional-delta-1"><span class="octicon octicon-link"></span></a><code>(fdec place &amp;optional (delta 1))</code>
+</h3>
+
+<p>Like <code>decf</code>, but returns the old value instead of the new.</p>
+
+<h3>
+<a name="parse-float-string-key-start-end-junk-allowed" class="anchor" href="#parse-float-string-key-start-end-junk-allowed"><span class="octicon octicon-link"></span></a><code>(parse-float string &amp;key start end junk-allowed)</code>
+</h3>
+
+<p>Based on the venerable <code>parse-float</code> from the CMU Lisp repository.
+Of course you could just use <code>parse-number</code>, but sometimes only a
+float will do.</p>
+
+<h3>
+<a name="round-to-number-optional-divisor" class="anchor" href="#round-to-number-optional-divisor"><span class="octicon octicon-link"></span></a><code>(round-to number &amp;optional divisor)</code>
+</h3>
+
+<p>Like <code>round</code>, but return the resulting number.</p>
+
+<pre><code> (round 15 10) =&gt; 2
+ (round-to 15 10) =&gt; 20
+</code></pre>
+
+<h3>
+<a name="bits-int" class="anchor" href="#bits-int"><span class="octicon octicon-link"></span></a><code>(bits int)</code>
+</h3>
+
+<p>Return a bit vector of the bits in INT.</p>
+
+<h3>
+<a name="unbits-bits" class="anchor" href="#unbits-bits"><span class="octicon octicon-link"></span></a><code>(unbits bits)</code>
+</h3>
+
+<p>Turn a sequence of BITS into an integer.</p>
+
+<h3>
+<a name="shrink-n-by" class="anchor" href="#shrink-n-by"><span class="octicon octicon-link"></span></a><code>(shrink n by)</code>
+</h3>
+
+<p>Decrease N by a factor.</p>
+
+<h3>
+<a name="grow-n-by" class="anchor" href="#grow-n-by"><span class="octicon octicon-link"></span></a><code>(grow n by)</code>
+</h3>
+
+<p>Increase N by a factor.</p>
+
+<h3>
+<a name="shrinkf-g40488-n" class="anchor" href="#shrinkf-g40488-n"><span class="octicon octicon-link"></span></a><code>(shrinkf g40488 n)</code>
+</h3>
+
+<p>Shrink the value in a place by a factor.</p>
+
+<h3>
+<a name="growf-g40510-n" class="anchor" href="#growf-g40510-n"><span class="octicon octicon-link"></span></a><code>(growf g40510 n)</code>
+</h3>
+
+<p>Grow the value in a place by a factor.</p>
+
+<h3>
+<a name="ln-n" class="anchor" href="#ln-n"><span class="octicon octicon-link"></span></a><code>(ln n)</code>
+</h3>
+
+<p>Natural logarithm.</p>
+
+<h3>
+<a name="lb-n" class="anchor" href="#lb-n"><span class="octicon octicon-link"></span></a><code>(lb n)</code>
+</h3>
+
+<p>Binary logarithm.</p>
+
+<h3>
+<a name="lg-n" class="anchor" href="#lg-n"><span class="octicon octicon-link"></span></a><code>(lg n)</code>
+</h3>
+
+<p>Decimal logarithm.</p>
+
+<h3>
+<a name="random-in-range-low-high" class="anchor" href="#random-in-range-low-high"><span class="octicon octicon-link"></span></a><code>(random-in-range low high)</code>
+</h3>
+
+<p>Random number in the range [low,high).</p>
+
+<p>From Zetalisp.</p>
+
+<h2>
+<a name="octets" class="anchor" href="#octets"><span class="octicon octicon-link"></span></a>Octets</h2>
+
+<h3>
+<a name="octet-vector-p-x" class="anchor" href="#octet-vector-p-x"><span class="octicon octicon-link"></span></a><code>(octet-vector-p x)</code>
+</h3>
+
+<p>Is X an octet vector?</p>
+
+<h3>
+<a name="make-octet-vector-size" class="anchor" href="#make-octet-vector-size"><span class="octicon octicon-link"></span></a><code>(make-octet-vector size)</code>
+</h3>
+
+<p>Make an octet vector of SIZE elements.</p>
+
+<h3>
+<a name="octets-n" class="anchor" href="#octets-n"><span class="octicon octicon-link"></span></a><code>(octets n)</code>
+</h3>
+
+<p>Return N, an integer, as a little-endian octet vector.</p>
+
+<h3>
+<a name="unoctets-bytes" class="anchor" href="#unoctets-bytes"><span class="octicon octicon-link"></span></a><code>(unoctets bytes)</code>
+</h3>
+
+<p>Concatenate BYTES into an integer in little-endian order.</p>
+
+<h2>
+<a name="time" class="anchor" href="#time"><span class="octicon octicon-link"></span></a>Time</h2>
+
+<h3>
+<a name="universal-to-unix-time" class="anchor" href="#universal-to-unix-time"><span class="octicon octicon-link"></span></a><code>(universal-to-unix time)</code>
+</h3>
+
+<p>Convert a universal time to a Unix time.</p>
+
+<h3>
+<a name="unix-to-universal-time" class="anchor" href="#unix-to-universal-time"><span class="octicon octicon-link"></span></a><code>(unix-to-universal time)</code>
+</h3>
+
+<p>Convert a Unix time to a universal time.</p>
+
+<h3>
+<a name="get-unix-time" class="anchor" href="#get-unix-time"><span class="octicon octicon-link"></span></a><code>(get-unix-time)</code>
+</h3>
+
+<p>The current time as a count of seconds from the Unix epoch.</p>
+
+<h3>
+<a name="date-leap-year-p-year" class="anchor" href="#date-leap-year-p-year"><span class="octicon octicon-link"></span></a><code>(date-leap-year-p year)</code>
+</h3>
+
+<p>Is YEAR a leap year in the Gregorian calendar?</p>
+
+<h3>
+<a name="time-since-time" class="anchor" href="#time-since-time"><span class="octicon octicon-link"></span></a><code>(time-since time)</code>
+</h3>
+
+<p>Return seconds since TIME.</p>
+
+<h3>
+<a name="time-until-time" class="anchor" href="#time-until-time"><span class="octicon octicon-link"></span></a><code>(time-until time)</code>
+</h3>
+
+<p>Return seconds until TIME.</p>
+
+<h3>
+<a name="interval-key" class="anchor" href="#interval-key"><span class="octicon octicon-link"></span></a>`(interval &amp;key</h3>
+
+<pre><code>          seconds
+          minutes
+          hours
+          days
+          weeks
+          months
+          years
+          month-days
+          year-days)`
+</code></pre>
+
+<p>A verbose but readable way of specifying intervals in seconds.</p>
+
+<p>Intended as a more readable alternative to idioms
+like (let ((day-in-seconds #.(* 24 60 60))) ...)</p>
+
+<p>Has a compiler macro.</p>
+
+<h3>
+<a name="with-timing-key-quiet-gc-repeat-body-body" class="anchor" href="#with-timing-key-quiet-gc-repeat-body-body"><span class="octicon octicon-link"></span></a><code>(with-timing (&amp;key quiet gc repeat) &amp;body body)</code>
+</h3>
+
+<p>A convenience wrapper around TIME.</p>
+
+<p>QUIET suppresses both the return value and any output to
+<code>*standard-output*</code>.</p>
+
+<p>REPEAT specifies a number of repetitions.</p>
+
+<p>If GC is non-nil, perform a garbage collection before running BODY.
+This can be useful with repeated trials, when you want to make sure
+the running time of the <em>nth</em> run is not distorted by cleaning up
+after the runs before it.</p>
+
+<h2>
+<a name="clos" class="anchor" href="#clos"><span class="octicon octicon-link"></span></a>Clos</h2>
+
+<h3>
+<a name="make-class-rest-initargs" class="anchor" href="#make-class-rest-initargs"><span class="octicon octicon-link"></span></a><code>(make class &amp;rest initargs)</code>
+</h3>
+
+<p>Shorthand for <code>make-instance</code>.
+After Eulisp.</p>
+
+<h3>
+<a name="class-name-safe-x" class="anchor" href="#class-name-safe-x"><span class="octicon octicon-link"></span></a><code>(class-name-safe x)</code>
+</h3>
+
+<p>The class name of the class of X.
+If X is a class, the name of the class itself.</p>
+
+<h3>
+<a name="find-class-safe-x" class="anchor" href="#find-class-safe-x"><span class="octicon octicon-link"></span></a><code>(find-class-safe x)</code>
+</h3>
+
+<p>The class designated by X.
+If X is a class, it designates itself.</p>
+
+<h2>
+<a name="hooks" class="anchor" href="#hooks"><span class="octicon octicon-link"></span></a>Hooks</h2>
+
+<h3>
+<a name="add-hook-name-fn" class="anchor" href="#add-hook-name-fn"><span class="octicon octicon-link"></span></a><code>(add-hook name fn)</code>
+</h3>
+
+<p>Add FN to the value of NAME, a hook.</p>
+
+<h3>
+<a name="remove-hook-name-fn" class="anchor" href="#remove-hook-name-fn"><span class="octicon octicon-link"></span></a><code>(remove-hook name fn)</code>
+</h3>
+
+<p>Remove fn from the symbol value of NAME.</p>
+
+<h3>
+<a name="run-hooks-rest-hookvars" class="anchor" href="#run-hooks-rest-hookvars"><span class="octicon octicon-link"></span></a><code>(run-hooks &amp;rest hookvars)</code>
+</h3>
+
+<p>Run all the hooks in all the HOOKVARS.
+The variable <code>*hook*</code> is bound to each hook as it is being run.</p>
+
+<h3>
+<a name="run-hook-with-args-hook-rest-args" class="anchor" href="#run-hook-with-args-hook-rest-args"><span class="octicon octicon-link"></span></a><code>(run-hook-with-args hook &amp;rest args)</code>
+</h3>
+
+<p>Apply each function in the symbol value of HOOK to ARGS.</p>
+
+<h3>
+<a name="run-hook-with-args-until-failure-hook-rest-args" class="anchor" href="#run-hook-with-args-until-failure-hook-rest-args"><span class="octicon octicon-link"></span></a><code>(run-hook-with-args-until-failure hook &amp;rest args)</code>
+</h3>
+
+<p>Like <code>run-hook-with-args</code>, but quit once a function returns nil.</p>
+
+<h3>
+<a name="run-hook-with-args-until-success-hook-rest-args" class="anchor" href="#run-hook-with-args-until-success-hook-rest-args"><span class="octicon octicon-link"></span></a><code>(run-hook-with-args-until-success hook &amp;rest args)</code>
+</h3>
+
+<p>Like <code>run-hook-with-args</code>, but quit once a function returns
+non-nil.</p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Serapeum maintained by <a href="https://github.com/TBRSS">TBRSS</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
